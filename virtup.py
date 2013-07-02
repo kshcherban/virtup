@@ -132,6 +132,8 @@ def getip(mac):
         time.sleep(1)
         lease.close()
         t += 1
+    if not ip:
+        return 'not found'
     return ip
 
 parser = argparse.ArgumentParser(prog='virtup.py')
