@@ -19,10 +19,13 @@ def randomMAC():
 
 # Create disk image
 def createimg(machname, imgsize, imgpath=None):
-    if not imgpath:
-        imgpath = os.getcwd() + '/' + machname
     if os.path.isfile(imgpath):
         return imgpath
+    elif os.path.isdir(imgpath):
+        imgpath = imgpath + '/' + machname
+    else:
+        print 'Error! Provided path not found'
+        sys.exit(1)
     cmd = "/usr/bin/qemu-img create -f raw {} {}K".format(imgpath, imgsize).split()
     run = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()
 # Print error if is and exit
@@ -120,6 +123,7 @@ def getip(mac):
         print "Can't open /var/lib/libvirt/dnsmasq/default.leases"
         sys.exit(1)
     t = 0
+    ip = None
     print 'Waiting for machine\'s ip...'
     while t < 60:
         lease = open('/var/lib/libvirt/dnsmasq/default.leases', 'r')
@@ -135,17 +139,31 @@ def getip(mac):
         return 'not found'
     return ip
 
+# Here we parse all the commands
 parser = argparse.ArgumentParser(prog='virtup.py')
-parser.add_argument('-n', '--name', type=str, required=True, 
+parser.add_argument('-v', '--version', action='version', version='%(prog)s 0.1')
+subparsers = parser.add_subparsers(dest='sub')
+# Parent argparser to contain repeated arguments
+parent = argparse.ArgumentParser(add_help=False)
+parent.add_argument('-n', dest='name', type=str, required=True, 
                     help='virtual machine name')
-parser.add_argument('-c', '--cpus', type=int, default=1, 
+parent.add_argument('-c', dest='cpus', type=int, default=1, 
                     help='amount of CPU cores, default is 1')
-parser.add_argument('-m', '--memory', type=str, default='512M', 
+parent.add_argument('-m', dest='mem', metavar='RAM', type=str, default='512M', 
                     help='amount of memory, can be M or G, default is 512M')
-parser.add_argument('-i', '--image', 
-                    help='disk image file location')
-parser.add_argument('-s', '--size', default='8G', 
+box_add = subparsers.add_parser('add', parents=[parent], 
+    description='Add virtual machine from image file', 
+    help='Add virtual machine from image file')
+box_add.add_argument('image', type=argparse.FileType('r'), help='image file location')
+box_create = subparsers.add_parser('create', parents=[parent], 
+    description='Create virtual machine from scratch', 
+    help='Create virtual machine')
+box_create.add_argument('-p', dest='image', type=str, default='/var/lib/libvirt/images', 
+    help='path to directory where image will be stored, default is /var/lib/libvirt/images')
+box_create.add_argument('-s', dest='size', type=str, default='8G', 
                     help='disk image size, can be M or G, default is 8G')
+help_c = subparsers.add_parser('help')
+help_c.add_argument('command', nargs="?", default=None)
 
 def argcheck(arg):
     if arg[-1].lower() == 'm':
@@ -156,21 +174,33 @@ def argcheck(arg):
         print 'Error! Format can be <int>M or <int>G'
         sys.exit(1)
 
+
 if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        parser.parse_args(['--help'])
     args = parser.parse_args()
-    mem = argcheck(args.memory)
-    imgsize = argcheck(args.size)
+# Help command emulation
+    if args.sub == "help":
+        if not args.command:
+            parser.parse_args(['--help'])
+        else:
+            parser.parse_args([args.command, '--help'])
+    mem = argcheck(args.mem)
+    if args.sub == 'create':
+        imgsize = argcheck(args.size)
+    else:
+        imgsize = argcheck('8G')
     mac = randomMAC()
     image = createimg(args.name, imgsize, os.path.abspath(args.image))
-    template = preptempl(args.name, mac, args.cpus, mem, image)
-    cmd = '/usr/bin/virsh define {}'.format(template).split()
-    run = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()
-    if len(run[1]) > 1:
-        print run[1]
-        sys.exit(1)
-    print run[0].rstrip()
-    cmd = '/usr/bin/virsh start {}'.format(args.name).split()
-    run = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()
-    print run[0].rstrip()
-    ip = getip(mac)
-    print 'You can connect to running machine at', ip
+#    template = preptempl(args.name, mac, args.cpus, mem, image)
+#    cmd = '/usr/bin/virsh define {}'.format(template).split()
+#    run = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()
+#    if len(run[1]) > 1:
+#        print run[1]
+#        sys.exit(1)
+#    print run[0].rstrip()
+#    cmd = '/usr/bin/virsh start {}'.format(args.name).split()
+#    run = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()
+#    print run[0].rstrip()
+#    ip = getip(mac)
+#    print 'You can connect to running machine at', ip
