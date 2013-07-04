@@ -5,9 +5,11 @@ import os
 import sys
 import time
 import random
+import libvirt
 import argparse
 import subprocess
 from subprocess import Popen, PIPE
+from xml.etree import ElementTree as ET
 
 # Generate random MAC address
 def randomMAC():
@@ -22,7 +24,7 @@ def createimg(machname, imgsize, imgpath=None):
     if os.path.isfile(imgpath):
         return imgpath
     elif os.path.isdir(imgpath):
-        imgpath = imgpath + '/' + machname
+        imgpath = imgpath + '/' + machname + '.img'
     else:
         print 'Error! Provided path not found'
         sys.exit(1)
@@ -32,13 +34,11 @@ def createimg(machname, imgsize, imgpath=None):
     if len(run[1]) > 0:
         print run[1]
         sys.exit(1)
-    print run[0]
+    print run[0].rstrip()
     return imgpath
 
 # Prepare template to import with virsh
 def preptempl(machname, mac, cpu=1, mem=524288, img=None):
-    if not img:
-        img = os.getcwd() + '/' + machname
     cmd = '/usr/bin/qemu-img info {}'.format(img).split()
     format = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0].split()[4]
     tmpl = '''
@@ -108,12 +108,19 @@ def preptempl(machname, mac, cpu=1, mem=524288, img=None):
     </memballoon>
   </devices>
 </domain> '''.format(machname, mem, cpu, format, img, mac)
-    tmpf = '/tmp/' + machname + str(random.randint(1, 1000)) + '.xml'
+    tmpf = '/tmp/' + machname + str(random.randint(1000, 9999)) + '.xml'
     f = open(tmpf, 'w')
     f.write(tmpl)
     f.close()
     print 'Temporary template written in', tmpf
-    return tmpf
+    return tmpl
+
+# Get MAC address of virtual domain
+def getmac(dom):
+    xe = ET.fromstring(dom.XMLDesc(0))
+    for iface in xe.findall('.//devices/interface'):
+        mac = iface.find('mac').get('address')
+    return mac
 
 # Get IP address of running machine
 def getip(mac):
@@ -145,8 +152,7 @@ parser.add_argument('-v', '--version', action='version', version='%(prog)s 0.1')
 subparsers = parser.add_subparsers(dest='sub')
 # Parent argparser to contain repeated arguments
 parent = argparse.ArgumentParser(add_help=False)
-parent.add_argument('-n', dest='name', type=str, required=True, 
-                    help='virtual machine name')
+parent.add_argument('name', type=str, help='virtual machine name')
 parent.add_argument('-c', dest='cpus', type=int, default=1, 
                     help='amount of CPU cores, default is 1')
 parent.add_argument('-m', dest='mem', metavar='RAM', type=str, default='512M', 
@@ -154,7 +160,8 @@ parent.add_argument('-m', dest='mem', metavar='RAM', type=str, default='512M',
 box_add = subparsers.add_parser('add', parents=[parent], 
     description='Add virtual machine from image file', 
     help='Add virtual machine from image file')
-box_add.add_argument('image', type=argparse.FileType('r'), help='image file location')
+box_add.add_argument('-i', dest='image', type=str, metavar='IMAGE',
+    help='image file location')
 box_create = subparsers.add_parser('create', parents=[parent], 
     description='Create virtual machine from scratch', 
     help='Create virtual machine')
@@ -162,6 +169,19 @@ box_create.add_argument('-p', dest='image', type=str, default='/var/lib/libvirt/
     help='path to directory where image will be stored, default is /var/lib/libvirt/images')
 box_create.add_argument('-s', dest='size', type=str, default='8G', 
                     help='disk image size, can be M or G, default is 8G')
+box_ls = subparsers.add_parser('ls', help='List virtual machines', 
+    description='List existing virtual machines and their state')
+box_rm = subparsers.add_parser('rm', description='Remove virtual machine', 
+    help='Remove virtual machine')
+box_rm.add_argument('name', type=str, help='virtual machine name')
+box_rm.add_argument('--full', action='store_true', 
+        help='remove machine with image assigned to it')
+box_start = subparsers.add_parser('up', description='Start virtual machine', 
+    help='Start virtual machine')
+box_start.add_argument('name', type=str, help='virtual machine name')
+box_stop = subparsers.add_parser('down', description='Power off virtual machine',
+        help='Power off virtual machine')
+box_stop.add_argument('name', type=str, help='virtual machine name')
 help_c = subparsers.add_parser('help')
 help_c.add_argument('command', nargs="?", default=None)
 
@@ -185,22 +205,63 @@ if __name__ == '__main__':
             parser.parse_args(['--help'])
         else:
             parser.parse_args([args.command, '--help'])
-    mem = argcheck(args.mem)
+    conn = libvirt.open('qemu:///system')
+    try: mem = argcheck(args.mem)
+    except: pass
+    if args.sub == 'ls':
+        vsorted = [conn.lookupByID(i).name() for i in conn.listDomainsID()]
+        for i in sorted(vsorted):
+            print '{:<30}{:>10}'.format(i, 'up')
+        for i in sorted(conn.listDefinedDomains()):
+            print '{:<30}{:>10}'.format(i, 'down')
+        sys.exit(0)
     if args.sub == 'create':
         imgsize = argcheck(args.size)
     else:
         imgsize = argcheck('8G')
-    mac = randomMAC()
-    image = createimg(args.name, imgsize, os.path.abspath(args.image))
-#    template = preptempl(args.name, mac, args.cpus, mem, image)
-#    cmd = '/usr/bin/virsh define {}'.format(template).split()
-#    run = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()
-#    if len(run[1]) > 1:
-#        print run[1]
-#        sys.exit(1)
-#    print run[0].rstrip()
-#    cmd = '/usr/bin/virsh start {}'.format(args.name).split()
-#    run = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()
-#    print run[0].rstrip()
-#    ip = getip(mac)
-#    print 'You can connect to running machine at', ip
+    if args.sub == 'create' or args.sub == 'add':
+        if not os.path.isfile(args.image) and args.sub == 'add':
+            print args.image, 'not found'
+            sys.exit(1)
+        mac = randomMAC()
+        image = createimg(args.name, imgsize, os.path.abspath(args.image))
+        template = preptempl(args.name, mac, args.cpus, mem, image)
+        try:
+            conn.defineXML(template)
+            print args.name, 'created, you can start it now'
+        except libvirt.libvirtError:
+            sys.exit(1)
+    if args.sub == 'up':
+        try:
+            dom = conn.lookupByName(args.name)
+            s = dom.create()
+            if s == 0:
+                print args.name, 'started'
+            ip = getip(getmac(dom))
+            print 'You can connect to running machine at', ip
+        except libvirt.libvirtError:
+            sys.exit(1)
+    if args.sub == 'down':
+        try:
+            dom = conn.lookupByName(args.name)
+            s = dom.destroy()
+            if s == 0:
+                print args.name, 'powered off'
+                sys.exit(0)
+        except libvirt.libvirtError:
+            sys.exit(1)
+    if args.sub == 'rm':
+        try:
+            dom = conn.lookupByName(args.name)
+            xe = ET.fromstring(dom.XMLDesc(0))
+            dom.undefine()
+            print args.name, 'removed'
+            if args.full:
+                imgfile = xe.find('.//devices/disk').find('source').get('file')
+                os.remove(imgfile)
+        except libvirt.libvirtError:
+            sys.exit(1)
+        except OSError, e:
+            print 'Can not remove assigned image'
+            print e
+            sys.exit(1)
