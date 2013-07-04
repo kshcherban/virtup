@@ -151,37 +151,48 @@ parser = argparse.ArgumentParser(prog='virtup.py')
 parser.add_argument('-v', '--version', action='version', version='%(prog)s 0.1')
 subparsers = parser.add_subparsers(dest='sub')
 # Parent argparser to contain repeated arguments
+suparent = argparse.ArgumentParser(add_help=False)
+suparent.add_argument('name', type=str, help='virtual machine name')
 parent = argparse.ArgumentParser(add_help=False)
-parent.add_argument('name', type=str, help='virtual machine name')
 parent.add_argument('-c', dest='cpus', type=int, default=1, 
-                    help='amount of CPU cores, default is 1')
+        help='amount of CPU cores, default is 1')
 parent.add_argument('-m', dest='mem', metavar='RAM', type=str, default='512M', 
-                    help='amount of memory, can be M or G, default is 512M')
-box_add = subparsers.add_parser('add', parents=[parent], 
-    description='Add virtual machine from image file', 
-    help='Add virtual machine from image file')
+        help='amount of memory, can be M or G, default is 512M')
+box_add = subparsers.add_parser('add', parents=[parent, suparent], 
+        description='Add virtual machine from image file', 
+        help='Add virtual machine from image file')
 box_add.add_argument('-i', dest='image', type=str, metavar='IMAGE',
-    help='image file location')
-box_create = subparsers.add_parser('create', parents=[parent], 
-    description='Create virtual machine from scratch', 
-    help='Create virtual machine')
+        help='image file location')
+box_create = subparsers.add_parser('create', parents=[parent, suparent], 
+        description='Create virtual machine from scratch', 
+        help='Create virtual machine')
 box_create.add_argument('-p', dest='image', type=str, default='/var/lib/libvirt/images', 
-    help='path to directory where image will be stored, default is /var/lib/libvirt/images')
+        help='path to directory where image will be stored, default is /var/lib/libvirt/images')
 box_create.add_argument('-s', dest='size', type=str, default='8G', 
-                    help='disk image size, can be M or G, default is 8G')
+        help='disk image size, can be M or G, default is 8G')
 box_ls = subparsers.add_parser('ls', help='List virtual machines', 
-    description='List existing virtual machines and their state')
-box_rm = subparsers.add_parser('rm', description='Remove virtual machine', 
-    help='Remove virtual machine')
-box_rm.add_argument('name', type=str, help='virtual machine name')
+        description='List existing virtual machines and their state')
+box_rm = subparsers.add_parser('rm', parents=[suparent], 
+        description='Remove virtual machine', 
+        help='Remove virtual machine')
 box_rm.add_argument('--full', action='store_true', 
         help='remove machine with image assigned to it')
-box_start = subparsers.add_parser('up', description='Start virtual machine', 
-    help='Start virtual machine')
-box_start.add_argument('name', type=str, help='virtual machine name')
-box_stop = subparsers.add_parser('down', description='Power off virtual machine',
+box_start = subparsers.add_parser('up', parents=[suparent], 
+        description='Start virtual machine', 
+        help='Start virtual machine')
+box_stop = subparsers.add_parser('down', parents=[suparent], 
+        description='Power off virtual machine',
         help='Power off virtual machine')
-box_stop.add_argument('name', type=str, help='virtual machine name')
+box_suspend = subparsers.add_parser('suspend', parents=[suparent], 
+        help='Suspend virtual machine',
+        description='Suspend current state of virtual machine to disk')
+box_suspend.add_argument('-f', metavar='FILE', 
+        help='File where machine state will be saved, default is ./<name>.sav')
+box_resume = subparsers.add_parser('resume', parents=[suparent],
+        help='Resume virtual machine',
+        description='Resume virtual machine from file')
+box_resume.add_argument('-f', metavar='FILE',  
+        help='File from which machine state will be resumed, default is ./<name>.sav')
 help_c = subparsers.add_parser('help')
 help_c.add_argument('command', nargs="?", default=None)
 
@@ -265,3 +276,28 @@ if __name__ == '__main__':
             print 'Can not remove assigned image'
             print e
             sys.exit(1)
+    if args.sub == 'suspend':
+        try:
+            dom = conn.lookupByName(args.name)
+            if not args.f:
+                args.f = './' + args.name + '.sav'
+            dom.save(args.f)
+            print args.name, 'suspended to', args.f
+        except:
+            sys.exit(1)
+    if args.sub == 'resume':
+        saved = './' + args.name + '.sav'
+        if not args.f and not os.path.isfile(saved):
+            print 'Resume file not provided and default saved not found'
+            sys.exit(1)
+        elif not args.f:
+            args.f = saved
+        if not os.path.isfile(args.f):
+            print args.f, 'not found'
+            sys.exit(1)
+        try:
+            conn.restore(args.f)
+            print args.name, 'resumed from', args.f
+        except libvirt.libvirtError:
+            sys.exit(1)
+    
