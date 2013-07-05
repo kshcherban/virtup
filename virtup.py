@@ -80,7 +80,6 @@ def preptempl(machname, mac, cpu=1, mem=524288, img=None):
     <controller type='ide' index='0'>
       <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x1'/>
     </controller>
-    <controller type='pci' index='0' model='pci-root'/>
     <interface type='network'>
       <mac address='{5}'/>
       <source network='default'/>
