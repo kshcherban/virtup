@@ -7,8 +7,6 @@ import time
 import random
 import libvirt
 import argparse
-import subprocess
-from subprocess import Popen, PIPE
 from xml.etree import ElementTree as ET
 
 # Generate random MAC address
@@ -19,6 +17,17 @@ def randomMAC():
         random.randint(0x00, 0xff) ]
     return ':'.join(map(lambda x: "%02x" % x, mac))
 
+# Guess image type
+def find_image_format(filepath):
+    f = open(filepath).read(1024)
+    if 'QFI' in f:
+        return 'qcow2'
+    if 'Virtual Disk Image' in f:
+        return 'vdi'
+    if 'virtualHWVersion' in f:
+        return 'vmdk'
+    return 'raw'
+
 # Create disk image
 def createimg(machname, imgsize, imgpath=None):
     if os.path.isfile(imgpath):
@@ -28,24 +37,25 @@ def createimg(machname, imgsize, imgpath=None):
     else:
         print 'Error! Provided path not found'
         sys.exit(1)
-    cmd = "/usr/bin/qemu-img create -f raw {} {}K".format(imgpath, imgsize).split()
-    run = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()
-# Print error if is and exit
-    if len(run[1]) > 0:
-        print run[1]
+    try:
+# writing empty file of defined size
+        f = open(imgpath, 'wb')
+        f.seek(imgsize - 1)
+        f.write('\0')
+        f.close
+    except IOError, e:
+        print e
         sys.exit(1)
-    print run[0].rstrip()
     return imgpath
 
 # Prepare template to import with virsh
 def preptempl(machname, mac, cpu=1, mem=524288, img=None):
-    cmd = '/usr/bin/qemu-img info {}'.format(img).split()
-    format = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0].split()[4]
+    format = find_image_format(img)
     tmpl = '''
 <domain type='kvm'>
   <name>{0}</name>
-  <memory unit='KiB'>{1}</memory>
-  <currentMemory unit='KiB'>{1}</currentMemory>
+  <memory unit='B'>{1}</memory>
+  <currentMemory unit='B'>{1}</currentMemory>
   <vcpu placement='static'>{2}</vcpu>
   <os>
     <type arch='x86_64' machine='pc-1.1'>hvm</type>
@@ -146,6 +156,15 @@ def getip(mac):
         return 'not found'
     return ip
 
+def argcheck(arg):
+    if arg[-1].lower() == 'm':
+        return int(arg[:-1]) * (1024 ** 2)
+    elif arg[-1].lower() == 'g':
+        return int(arg[:-1]) * (1024 ** 3)
+    else:
+        print 'Error! Format can be <int>M or <int>G'
+        sys.exit(1)
+
 # Here we parse all the commands
 parser = argparse.ArgumentParser(prog='virtup.py')
 parser.add_argument('-v', '--version', action='version', version='%(prog)s 0.1')
@@ -195,15 +214,6 @@ box_resume.add_argument('-f', metavar='FILE',
         help='File from which machine state will be resumed, default is ./<name>.sav')
 help_c = subparsers.add_parser('help')
 help_c.add_argument('command', nargs="?", default=None)
-
-def argcheck(arg):
-    if arg[-1].lower() == 'm':
-        return int(arg[:-1]) * 1024
-    elif arg[-1].lower() == 'g':
-        return int(arg[:-1]) * 1024 * 1024
-    else:
-        print 'Error! Format can be <int>M or <int>G'
-        sys.exit(1)
 
 
 if __name__ == '__main__':
