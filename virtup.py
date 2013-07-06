@@ -161,6 +161,7 @@ box_add = subparsers.add_parser('add', parents=[parent, suparent],
         description='Add virtual machine from image file', 
         help='Add virtual machine from image file')
 box_add.add_argument('-i', dest='image', type=str, metavar='IMAGE',
+        required=True,
         help='image file location')
 box_create = subparsers.add_parser('create', parents=[parent, suparent], 
         description='Create virtual machine from scratch', 
