@@ -48,9 +48,37 @@ def createimg(machname, imgsize, imgpath=None):
         sys.exit(1)
     return imgpath
 
+# Create LVM volume
+def createvol(machname, imgsize, stor, vol):
+    try:
+        s = conn.storagePoolLookupByName(stor)
+    except libvirt.libvirtError:
+        sys.exit(1)
+    tmpl = '''
+<volume>
+  <name>{0}</name>
+  <capacity>{1}</capacity>
+  <allocation>{1}</allocation>
+  <target>
+    <path>/dev/{2}/{0}</path>
+    <permissions>
+      <mode>0660</mode>
+    </permissions>
+  </target>
+</volume>
+'''.format(vol, imgsize, stor)
+    try:
+        s.createXML(tmpl)
+    except libvirt.libvirtError:
+        sys.exit(1)
+    return '/dev/{}/{}'.format(stor, vol)
+
 # Prepare template to import with virsh
-def preptempl(machname, mac, cpu=1, mem=524288, img=None):
-    format = find_image_format(img)
+def preptempl(machname, mac, cpu=1, mem=524288, img=None, dtype='file'):
+    try: format = find_image_format(img)
+    except: format = 'raw'
+    if dtype  == 'file': src = 'file'
+    else: src = 'dev'
     tmpl = '''
 <domain type='kvm'>
   <name>{0}</name>
@@ -72,9 +100,9 @@ def preptempl(machname, mac, cpu=1, mem=524288, img=None):
   <on_crash>restart</on_crash>
   <devices>
     <emulator>/usr/bin/kvm</emulator>
-    <disk type='file' device='disk'>
+    <disk type='{6}' device='disk'>
       <driver name='qemu' type='{3}' cache='none' io='native'/>
-      <source file='{4}'/>
+      <source {7}='{4}'/>
       <target dev='vda' bus='virtio'/>
       <address type='pci' domain='0x0000' bus='0x00' slot='0x05' function='0x0'/>
     </disk>
@@ -116,7 +144,7 @@ def preptempl(machname, mac, cpu=1, mem=524288, img=None):
       <address type='pci' domain='0x0000' bus='0x00' slot='0x06' function='0x0'/>
     </memballoon>
   </devices>
-</domain> '''.format(machname, mem, cpu, format, img, mac)
+</domain> '''.format(machname, mem, cpu, format, img, mac, dtype, src)
     tmpf = '/tmp/' + machname + str(random.randint(1000, 9999)) + '.xml'
     f = open(tmpf, 'w')
     f.write(tmpl)
@@ -185,12 +213,17 @@ box_add.add_argument('-i', dest='image', type=str, metavar='IMAGE',
 box_create = subparsers.add_parser('create', parents=[parent, suparent], 
         description='Create virtual machine from scratch', 
         help='Create virtual machine')
-box_create.add_argument('-p', dest='image', type=str, default='/var/lib/libvirt/images', 
-        help='path to directory where image will be stored, default is /var/lib/libvirt/images')
+box_create.add_argument('-p', dest='image', metavar='NAME', type=str, 
+        default='/var/lib/libvirt/images',
+        help='path to directory where image will be stored or LVM pool name, default is /var/lib/libvirt/images')
+box_create.add_argument('-v', dest='volume', type=str, default='volume',
+        help='name of LVM volume, default is "volume"')
 box_create.add_argument('-s', dest='size', type=str, default='8G', 
         help='disk image size, can be M or G, default is 8G')
-box_ls = subparsers.add_parser('ls', help='List virtual machines', 
-        description='List existing virtual machines and their state')
+box_ls = subparsers.add_parser('ls', help='List virtual machines/storage pools', 
+        description='List existing virtual machines and their state or active storage pools')
+box_ls.add_argument('-s', dest='storage', action='store_true',
+        help='If specified active storage pools will be listed')
 box_rm = subparsers.add_parser('rm', parents=[suparent], 
         description='Remove virtual machine', 
         help='Remove virtual machine')
@@ -230,6 +263,10 @@ if __name__ == '__main__':
     try: mem = argcheck(args.mem)
     except: pass
     if args.sub == 'ls':
+        if args.storage:
+            for i in sorted(conn.listStoragePools()):
+                print i
+            sys.exit(0)
         vsorted = [conn.lookupByID(i).name() for i in conn.listDomainsID()]
         for i in sorted(vsorted):
             print '{:<30}{:>10}'.format(i, 'up')
@@ -244,9 +281,16 @@ if __name__ == '__main__':
         if not os.path.isfile(args.image) and args.sub == 'add':
             print args.image, 'not found'
             sys.exit(1)
+        elif args.volume and not args.image:
+            print '-p option is required for -v'
+            sys.exit(1)
         mac = randomMAC()
-        image = createimg(args.name, imgsize, os.path.abspath(args.image))
-        template = preptempl(args.name, mac, args.cpus, mem, image)
+        if args.image in conn.listStoragePools():
+            image = createvol(args.name, imgsize, args.image, args.volume)
+            template = preptempl(args.name, mac, args.cpus, mem, image, 'block')
+        else:
+            image = createimg(args.name, imgsize, os.path.abspath(args.image))
+            template = preptempl(args.name, mac, args.cpus, mem, image)
         try:
             conn.defineXML(template)
             print args.name, 'created, you can start it now'
@@ -279,7 +323,11 @@ if __name__ == '__main__':
             print args.name, 'removed'
             if args.full:
                 imgfile = xe.find('.//devices/disk').find('source').get('file')
-                os.remove(imgfile)
+                if imgfile: 
+                    os.remove(imgfile)
+                else: 
+                    pv = xe.find('.//devices/disk').find('source').get('dev').split('/')
+                    conn.storagePoolLookupByName(pv[-2]).storageVolLookupByName(pv[-1]).delete()
         except libvirt.libvirtError:
             sys.exit(1)
         except OSError, e:
