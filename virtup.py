@@ -90,7 +90,6 @@ def preptempl(machname, mac, cpu=1, mem=524288, img=None):
     <controller type='ide' index='0'>
       <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x1'/>
     </controller>
-    <controller type='pci' index='0' model='pci-root'/>
     <interface type='network'>
       <mac address='{5}'/>
       <source network='default'/>
@@ -181,6 +180,7 @@ box_add = subparsers.add_parser('add', parents=[parent, suparent],
         description='Add virtual machine from image file', 
         help='Add virtual machine from image file')
 box_add.add_argument('-i', dest='image', type=str, metavar='IMAGE',
+        required=True,
         help='image file location')
 box_create = subparsers.add_parser('create', parents=[parent, suparent], 
         description='Create virtual machine from scratch', 
