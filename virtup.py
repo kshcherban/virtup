@@ -301,16 +301,16 @@ if __name__ == '__main__':
         if not os.path.isfile(args.image) and args.sub == 'add':
             print args.image, 'not found'
             sys.exit(1)
-        elif args.volume and not args.image:
-            print '-p option is required for -v'
-            sys.exit(1)
         mac = randomMAC()
         if args.image in conn.listStoragePools():
             if not args.volume: args.volume = args.name + '_vol'
             image = createvol(args.name, imgsize, args.image, args.volume)
             template = preptempl(args.name, mac, args.cpus, mem, image, 'block')
         else:
-            if not args.volume: args.volume = args.name + '.img'
+            try:
+                if not args.volume: args.volume = args.name + '.img'
+            except:
+                args.volume = args.image
             image = createimg(args.name, imgsize, os.path.abspath(args.image), args.volume)
             template = preptempl(args.name, mac, args.cpus, mem, image)
         try:
@@ -353,7 +353,10 @@ if __name__ == '__main__':
                     sp[i] = conn.storagePoolLookupByName(i).listVolumes()
                 for i in sp.iteritems():
                     if vol in i[1]: pool = i[0]
-                conn.storagePoolLookupByName(pool).storageVolLookupByName(vol).delete()
+                try:
+                    conn.storagePoolLookupByName(pool).storageVolLookupByName(vol).delete()
+                except:
+                    os.remove(pv)
         except libvirt.libvirtError:
             sys.exit(1)
         except OSError, e:
