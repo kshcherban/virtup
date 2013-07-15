@@ -29,31 +29,48 @@ def find_image_format(filepath):
     return 'raw'
 
 # Create disk image
-def createimg(machname, imgsize, imgpath=None):
-    if os.path.isfile(imgpath):
+def createimg(machname, imgsize, imgpath=None, vol=None, stor='default'):
+    if os.path.isfile(imgpath): 
         return imgpath
     elif os.path.isdir(imgpath):
-        imgpath = imgpath + '/' + machname + '.img'
+        pass
     else:
         print 'Error! Provided path not found'
         sys.exit(1)
-    try:
+    tmpl = '''
+<volume>
+  <name>{0}</name>
+  <capacity unit='bytes'>{1}</capacity>
+  <allocation unit='bytes'>{1}</allocation>
+  <target>
+    <path>{2}</path>
+    <format type='raw'/>
+    <permissions>
+      <mode>0660</mode>
+    </permissions>
+  </target>
+</volume>
+'''.format(vol, imgsize, imgpath)
 # writing empty file of defined size
-        f = open(imgpath, 'wb')
-        f.seek(imgsize - 1)
-        f.write('\0')
-        f.close
-    except IOError, e:
-        print e
-        sys.exit(1)
-    return imgpath
-
-# Create LVM volume
-def createvol(machname, imgsize, stor, vol):
+#        f = open(imgpath, 'wb')
+#        f.seek(imgsize - 1)
+#        f.write('\0')
+#        f.close
+#    except IOError, e:
+#        print e
+#        sys.exit(1)
     try:
         s = conn.storagePoolLookupByName(stor)
     except libvirt.libvirtError:
         sys.exit(1)
+    try:
+        s.createXML(tmpl)
+    except libvirt.libvirtError:
+        sys.exit(1)
+    return imgpath + '/' + vol
+
+# Create LVM volume
+def createvol(machname, imgsize, stor, vol):
     tmpl = '''
 <volume>
   <name>{0}</name>
@@ -67,6 +84,10 @@ def createvol(machname, imgsize, stor, vol):
   </target>
 </volume>
 '''.format(vol, imgsize, stor)
+    try:
+        s = conn.storagePoolLookupByName(stor)
+    except libvirt.libvirtError:
+        sys.exit(1)
     try:
         s.createXML(tmpl)
     except libvirt.libvirtError:
@@ -99,7 +120,6 @@ def preptempl(machname, mac, cpu=1, mem=524288, img=None, dtype='file'):
   <on_reboot>restart</on_reboot>
   <on_crash>restart</on_crash>
   <devices>
-    <emulator>/usr/bin/kvm</emulator>
     <disk type='{6}' device='disk'>
       <driver name='qemu' type='{3}' cache='none' io='native'/>
       <source {7}='{4}'/>
@@ -216,14 +236,14 @@ box_create = subparsers.add_parser('create', parents=[parent, suparent],
 box_create.add_argument('-p', dest='image', metavar='NAME', type=str, 
         default='/var/lib/libvirt/images',
         help='path to directory where image will be stored or LVM pool name, default is /var/lib/libvirt/images')
-box_create.add_argument('-v', dest='volume', type=str, default='volume',
-        help='name of LVM volume, default is "volume"')
+box_create.add_argument('-v', dest='volume', type=str,
+        help='name of LVM volume, default is <name>_vol')
 box_create.add_argument('-s', dest='size', type=str, default='8G', 
         help='disk image size, can be M or G, default is 8G')
 box_ls = subparsers.add_parser('ls', help='List virtual machines/storage pools', 
         description='List existing virtual machines and their state or active storage pools')
 box_ls.add_argument('-s', dest='storage', action='store_true',
-        help='If specified active storage pools will be listed')
+        help='if specified active storage pools will be listed')
 box_rm = subparsers.add_parser('rm', parents=[suparent], 
         description='Remove virtual machine', 
         help='Remove virtual machine')
@@ -239,12 +259,12 @@ box_suspend = subparsers.add_parser('suspend', parents=[suparent],
         help='Suspend virtual machine',
         description='Suspend current state of virtual machine to disk')
 box_suspend.add_argument('-f', metavar='FILE', 
-        help='File where machine state will be saved, default is ./<name>.sav')
+        help='file where machine state will be saved, default is ./<name>.sav')
 box_resume = subparsers.add_parser('resume', parents=[suparent],
         help='Resume virtual machine',
         description='Resume virtual machine from file')
 box_resume.add_argument('-f', metavar='FILE',  
-        help='File from which machine state will be resumed, default is ./<name>.sav')
+        help='file from which machine state will be resumed, default is ./<name>.sav')
 help_c = subparsers.add_parser('help')
 help_c.add_argument('command', nargs="?", default=None)
 
@@ -286,10 +306,12 @@ if __name__ == '__main__':
             sys.exit(1)
         mac = randomMAC()
         if args.image in conn.listStoragePools():
+            if not args.volume: args.volume = args.name + '_vol'
             image = createvol(args.name, imgsize, args.image, args.volume)
             template = preptempl(args.name, mac, args.cpus, mem, image, 'block')
         else:
-            image = createimg(args.name, imgsize, os.path.abspath(args.image))
+            if not args.volume: args.volume = args.name + '.img'
+            image = createimg(args.name, imgsize, os.path.abspath(args.image), args.volume)
             template = preptempl(args.name, mac, args.cpus, mem, image)
         try:
             conn.defineXML(template)
@@ -322,12 +344,16 @@ if __name__ == '__main__':
             dom.undefine()
             print args.name, 'removed'
             if args.full:
-                imgfile = xe.find('.//devices/disk').find('source').get('file')
-                if imgfile: 
-                    os.remove(imgfile)
-                else: 
-                    pv = xe.find('.//devices/disk').find('source').get('dev').split('/')
-                    conn.storagePoolLookupByName(pv[-2]).storageVolLookupByName(pv[-1]).delete()
+                pv = xe.find('.//devices/disk').find('source').get('file')
+                if not pv: 
+                    pv = xe.find('.//devices/disk').find('source').get('dev')
+                vol = pv.split('/')[-1]
+                sp = {}
+                for i in conn.listStoragePools():
+                    sp[i] = conn.storagePoolLookupByName(i).listVolumes()
+                for i in sp.iteritems():
+                    if vol in i[1]: pool = i[0]
+                conn.storagePoolLookupByName(pool).storageVolLookupByName(vol).delete()
         except libvirt.libvirtError:
             sys.exit(1)
         except OSError, e:
