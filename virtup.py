@@ -282,6 +282,7 @@ if __name__ == '__main__':
     conn = libvirt.open('qemu:///system')
     try: mem = argcheck(args.mem)
     except: pass
+# Ls command section
     if args.sub == 'ls':
         if args.storage:
             for i in sorted(conn.listStoragePools()):
@@ -293,6 +294,7 @@ if __name__ == '__main__':
         for i in sorted(conn.listDefinedDomains()):
             print '{:<30}{:>10}'.format(i, 'down')
         sys.exit(0)
+# Add and Create section
     if args.sub == 'create':
         imgsize = argcheck(args.size)
     else:
@@ -318,6 +320,7 @@ if __name__ == '__main__':
             print args.name, 'created, you can start it now'
         except libvirt.libvirtError:
             sys.exit(1)
+# Up section
     if args.sub == 'up':
         try:
             dom = conn.lookupByName(args.name)
@@ -328,6 +331,7 @@ if __name__ == '__main__':
             print 'You can connect to running machine at', ip
         except libvirt.libvirtError:
             sys.exit(1)
+# Down section
     if args.sub == 'down':
         try:
             dom = conn.lookupByName(args.name)
@@ -337,6 +341,7 @@ if __name__ == '__main__':
                 sys.exit(0)
         except libvirt.libvirtError:
             sys.exit(1)
+# Rm section
     if args.sub == 'rm':
         try:
             dom = conn.lookupByName(args.name)
@@ -363,6 +368,7 @@ if __name__ == '__main__':
             print 'Can not remove assigned image'
             print e
             sys.exit(1)
+# Suspend section
     if args.sub == 'suspend':
         try:
             dom = conn.lookupByName(args.name)
@@ -372,6 +378,7 @@ if __name__ == '__main__':
             print args.name, 'suspended to', args.f
         except:
             sys.exit(1)
+# Resume section
     if args.sub == 'resume':
         saved = './' + args.name + '.sav'
         if not args.f and not os.path.isfile(saved):
