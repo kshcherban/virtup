@@ -209,6 +209,43 @@ def argcheck(arg):
         print 'Error! Format can be <int>M or <int>G'
         sys.exit(1)
 
+def lsvirt(storage):
+    if storage:
+        print '{0:<30}{1:<10}{2:<10}{3:<10}{4:<10}'.format('Pool name', 'Size', 
+            'Used', 'Avail', 'Use')
+        for i in sorted(conn.listStoragePools()):
+            p = conn.storagePoolLookupByName(i).info()
+            use = '{0:.2%}'.format(float(p[2]) / float(p[1]))
+            print '{0:<30}{1:<10}{2:<10}{3:<10}{4:<10}'.format(i, convert_bytes(p[1]), 
+                convert_bytes(p[2]), convert_bytes(p[3]), use)
+        sys.exit(0)
+    vsorted = [conn.lookupByID(i).name() for i in conn.listDomainsID()]
+    print '{0:<30}{1:>10}'.format('Name', 'State')
+    for i in sorted(vsorted):
+        print '{0:<30}{1:>10}'.format(i, 'up')
+    for i in sorted(conn.listDefinedDomains()):
+        print '{0:<30}{1:>10}'.format(i, 'down')
+    sys.exit(0)
+
+# Converting bytes to human-readable
+def convert_bytes(bytes):
+    bytes = float(bytes)
+    if bytes >= 1099511627776:
+        terabytes = bytes / 1099511627776
+        size = '%.2fT' % terabytes
+    elif bytes >= 1073741824:
+        gigabytes = bytes / 1073741824
+        size = '%.2fG' % gigabytes
+    elif bytes >= 1048576:
+        megabytes = bytes / 1048576
+        size = '%.2fM' % megabytes
+    elif bytes >= 1024:
+        kilobytes = bytes / 1024
+        size = '%.2fK' % kilobytes
+    else:
+        size = '%.2fb' % bytes
+    return size
+
 # Here we parse all the commands
 parser = argparse.ArgumentParser(prog='virtup.py')
 parser.add_argument('-v', '--version', action='version', version='%(prog)s 0.1')
@@ -281,16 +318,7 @@ if __name__ == '__main__':
     except: pass
 # Ls command section
     if args.sub == 'ls':
-        if args.storage:
-            for i in sorted(conn.listStoragePools()):
-                print i
-            sys.exit(0)
-        vsorted = [conn.lookupByID(i).name() for i in conn.listDomainsID()]
-        for i in sorted(vsorted):
-            print '{0:<30}{1:>10}'.format(i, 'up')
-        for i in sorted(conn.listDefinedDomains()):
-            print '{0:<30}{1:>10}'.format(i, 'down')
-        sys.exit(0)
+        lsvirt(args.storage)
 # Add and Create section
     if args.sub == 'create':
         imgsize = argcheck(args.size)
