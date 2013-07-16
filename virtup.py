@@ -107,7 +107,7 @@ def preptempl(machname, mac, cpu=1, mem=524288, img=None, dtype='file'):
   <currentMemory unit='B'>{1}</currentMemory>
   <vcpu placement='static'>{2}</vcpu>
   <os>
-    <type arch='x86_64' machine='pc-1.1'>hvm</type>
+    <type arch='x86_64' machine='pc'>hvm</type>
     <boot dev='hd'/>
   </os>
   <features>
@@ -132,9 +132,6 @@ def preptempl(machname, mac, cpu=1, mem=524288, img=None, dtype='file'):
       <readonly/>
       <address type='drive' controller='0' bus='1' target='0' unit='0'/>
     </disk>
-    <controller type='usb' index='0'>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x2'/>
-    </controller>
     <controller type='ide' index='0'>
       <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x1'/>
     </controller>
