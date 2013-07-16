@@ -92,7 +92,7 @@ def createvol(machname, imgsize, stor, vol):
         s.createXML(tmpl)
     except libvirt.libvirtError:
         sys.exit(1)
-    return '/dev/{}/{}'.format(stor, vol)
+    return '/dev/{0}/{1}'.format(stor, vol)
 
 # Prepare template to import with virsh
 def preptempl(machname, mac, cpu=1, mem=524288, img=None, dtype='file'):
@@ -290,9 +290,9 @@ if __name__ == '__main__':
             sys.exit(0)
         vsorted = [conn.lookupByID(i).name() for i in conn.listDomainsID()]
         for i in sorted(vsorted):
-            print '{:<30}{:>10}'.format(i, 'up')
+            print '{0:<30}{1:>10}'.format(i, 'up')
         for i in sorted(conn.listDefinedDomains()):
-            print '{:<30}{:>10}'.format(i, 'down')
+            print '{0:<30}{1:>10}'.format(i, 'down')
         sys.exit(0)
 # Add and Create section
     if args.sub == 'create':
