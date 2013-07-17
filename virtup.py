@@ -45,7 +45,6 @@ def upload_vol(vol, src):
             if ret == 0 or ret == len(data):                                         
                 break                                                                
             data = data[ret:]                                                        
-    #meter = progress.BaseMeter()                                      
     # Build placeholder volume                                                       
     size = os.path.getsize(src)                                                      
     basename = os.path.basename(src)                                                 
@@ -59,21 +58,18 @@ def upload_vol(vol, src):
         fileobj = file(src, "r")
         # Start transfer
         total = 0
-        #meter.start(size=size,                                                       
-        #            text=("Transferring %s") % os.path.basename(src))
         print 'Uploading template into volume', vol.name()
         while True:
-            #blocksize = (1024 ** 2)
             blocksize = 256000
             data = fileobj.read(blocksize)
             if not data:
                 break                                                          
             safe_send(data)
             total += len(data)
-            #meter.update(total)                                                      
+            sys.stderr.write('\rdone {0:.2%}'.format(float(total)/size)) 
         # Cleanup                                                              
-        stream.finish()                
-        #meter.end(size)                                             
+        stream.finish()
+        print('')
     except:                                                                      
         if vol:                                                            
             vol.delete(0)
@@ -87,6 +83,7 @@ def create_vol(machname, imgsize, imgpath, stor):
         format = find_image_format(imgpath)
         upload = True
     else:
+        imgsize = imgsize * 1024
         format = 'raw'
         upload = False
     try:
