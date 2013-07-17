@@ -162,7 +162,7 @@ def preptempl(machname, mac, cpu=1, mem=524288, img=None, dtype='file'):
     </memballoon>
   </devices>
 </domain> '''.format(machname, mem, cpu, format, img, mac, dtype, src)
-    tmpf = '/tmp/' + machname + str(random.randint(1000, 9999)) + '.xml'
+    tmpf = '/tmp/' + machname + '.xml'
     f = open(tmpf, 'w')
     f.write(tmpl)
     f.close()
