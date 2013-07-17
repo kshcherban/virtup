@@ -273,6 +273,8 @@ def convert_bytes(bytes):
 
 # Here we parse all the commands
 parser = argparse.ArgumentParser(prog='virtup.py')
+parser.add_argument('-u', '--uri', type=str, default='qemu:///system',
+        help='hypervisor connection URI, default is qemu:///system')
 parser.add_argument('-v', '--version', action='version', version='%(prog)s 0.1')
 subparsers = parser.add_subparsers(dest='sub')
 # Parent argparser to contain repeated arguments
@@ -336,7 +338,7 @@ if __name__ == '__main__':
             parser.parse_args(['--help'])
         else:
             parser.parse_args([args.command, '--help'])
-    conn = libvirt.open('qemu:///system')
+    conn = libvirt.open(args.uri)
     try: mem = argcheck(args.mem)
     except: pass
 # Ls command section
@@ -360,13 +362,6 @@ if __name__ == '__main__':
         else:
             dtype = 'file'
         template = prepare_tmpl(args.name, mac, args.cpus, mem, image, format, dtype)
-#        else:
-#           try:
-#               if not args.volume: args.volume = args.name + '.img'
-#           except:
-#               args.volume = args.image
-#           image = createimg(args.name, imgsize, os.path.abspath(args.image), args.volume)
-#           template = preptempl(args.name, mac, args.cpus, mem, image)
         try:
             conn.defineXML(template)
             print args.name, 'created, you can start it now'
