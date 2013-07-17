@@ -28,78 +28,103 @@ def find_image_format(filepath):
         return 'vmdk'
     return 'raw'
 
-# Create disk image
-def createimg(machname, imgsize, imgpath=None, vol=None, stor='default'):
+# Check if storage pool is LVM or dir
+def is_lvm(pool):
+    s = conn.storagePoolLookupByName(pool)
+    if ET.fromstring(s.XMLDesc(0)).get('type') == 'logical':
+        return 1
+    return 0
+
+# Upload image into volume 
+def upload_vol(vol, src):
+    # Build stream object                                                            
+    stream = conn.newStream(0)                                                       
+    def safe_send(data):                                                             
+        while True:                                                                  
+            ret = stream.send(data)                                                  
+            if ret == 0 or ret == len(data):                                         
+                break                                                                
+            data = data[ret:]                                                        
+    #meter = progress.BaseMeter()                                      
+    # Build placeholder volume                                                       
+    size = os.path.getsize(src)                                                      
+    basename = os.path.basename(src)                                                 
+    try:
+        # Register upload
+        offset = 0
+        length = size
+        flags = 0
+        stream.upload(vol, offset, length, flags)
+        # Open source file
+        fileobj = file(src, "r")
+        # Start transfer
+        total = 0
+        #meter.start(size=size,                                                       
+        #            text=("Transferring %s") % os.path.basename(src))
+        print 'Uploading template into volume', vol.name()
+        while True:
+            blocksize = (1024 ** 2)
+            data = fileobj.read(blocksize)
+            if not data:
+                break                                                          
+            safe_send(data)
+            total += len(data)
+            #meter.update(total)                                                      
+        # Cleanup                                                              
+        stream.finish()                
+        #meter.end(size)                                             
+    except:                                                                      
+        if vol:                                                            
+            vol.delete(0)
+        return 0
+    return 1
+
+# Create storage volume
+def create_vol(machname, imgsize, imgpath, stor):
     if os.path.isfile(imgpath): 
-        return imgpath
-    elif os.path.isdir(imgpath):
-        pass
+        imgsize = os.path.getsize(imgpath)
+        format = find_image_format(imgpath)
+        upload = True
     else:
-        print 'Error! Provided path not found'
+        format = 'raw'
+        upload = False
+    try:
+        s = conn.storagePoolLookupByName(stor)
+    except libvirt.libvirtError:
         sys.exit(1)
+    xe = ET.fromstring(s.XMLDesc(0))
+    # find storage pool path
+    spath = [i for i in xe.find('.//path').itertext()][0]
     tmpl = '''
 <volume>
   <name>{0}</name>
   <capacity unit='bytes'>{1}</capacity>
-  <allocation unit='bytes'>{1}</allocation>
   <target>
-    <path>{2}</path>
-    <format type='raw'/>
+    <path>{2}/{0}</path>
+    <format type='{3}'/>
     <permissions>
       <mode>0660</mode>
     </permissions>
   </target>
 </volume>
-'''.format(vol, imgsize, imgpath)
-# writing empty file of defined size
-#        f = open(imgpath, 'wb')
-#        f.seek(imgsize - 1)
-#        f.write('\0')
-#        f.close
-#    except IOError, e:
-#        print e
-#        sys.exit(1)
+'''.format(machname, imgsize, spath, format)
     try:
-        s = conn.storagePoolLookupByName(stor)
+        v = s.createXML(tmpl)
     except libvirt.libvirtError:
         sys.exit(1)
-    try:
-        s.createXML(tmpl)
-    except libvirt.libvirtError:
-        sys.exit(1)
-    return imgpath + '/' + vol
-
-# Create LVM volume
-def createvol(machname, imgsize, stor, vol):
-    tmpl = '''
-<volume>
-  <name>{0}</name>
-  <capacity>{1}</capacity>
-  <allocation>{1}</allocation>
-  <target>
-    <path>/dev/{2}/{0}</path>
-    <permissions>
-      <mode>0660</mode>
-    </permissions>
-  </target>
-</volume>
-'''.format(vol, imgsize, stor)
-    try:
-        s = conn.storagePoolLookupByName(stor)
-    except libvirt.libvirtError:
-        sys.exit(1)
-    try:
-        s.createXML(tmpl)
-    except libvirt.libvirtError:
-        sys.exit(1)
-    return '/dev/{0}/{1}'.format(stor, vol)
+    if upload:
+        upres = upload_vol(v, imgpath)
+        if not upres:
+            print 'Error importing template into storage pool'
+            sys.exit(1)
+    return spath + '/' + machname, format
 
 # Prepare template to import with virsh
-def preptempl(machname, mac, cpu=1, mem=524288, img=None, dtype='file'):
-    try: format = find_image_format(img)
-    except: format = 'raw'
-    if dtype  == 'file': src = 'file'
-    else: src = 'dev'
+def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype):
+    if dtype == 'file':
+        src = 'file'
+    else:
+        src = 'dev'
     tmpl = '''
 <domain type='kvm'>
   <name>{0}</name>
@@ -258,20 +283,18 @@ parent.add_argument('-c', dest='cpus', type=int, default=1,
         help='amount of CPU cores, default is 1')
 parent.add_argument('-m', dest='mem', metavar='RAM', type=str, default='512M', 
         help='amount of memory, can be M or G, default is 512M')
+parent.add_argument('-p', dest='pool', metavar='POOL', type=str, 
+        default='default',
+        help='storage pool name, default is "default"')
 box_add = subparsers.add_parser('add', parents=[parent, suparent], 
         description='Add virtual machine from image file', 
         help='Add virtual machine from image file')
 box_add.add_argument('-i', dest='image', type=str, metavar='IMAGE',
         required=True,
-        help='image file location')
+        help='template image file location')
 box_create = subparsers.add_parser('create', parents=[parent, suparent], 
         description='Create virtual machine from scratch', 
         help='Create virtual machine')
-box_create.add_argument('-p', dest='image', metavar='NAME', type=str, 
-        default='/var/lib/libvirt/images',
-        help='path to directory where image will be stored or LVM pool name, default is /var/lib/libvirt/images')
-box_create.add_argument('-v', dest='volume', type=str,
-        help='name of LVM volume, default is <name>_vol')
 box_create.add_argument('-s', dest='size', type=str, default='8G', 
         help='disk image size, can be M or G, default is 8G')
 box_ls = subparsers.add_parser('ls', help='List virtual machines/storage pools', 
@@ -320,26 +343,30 @@ if __name__ == '__main__':
     if args.sub == 'ls':
         lsvirt(args.storage)
 # Add and Create section
-    if args.sub == 'create':
-        imgsize = argcheck(args.size)
-    else:
-        imgsize = argcheck('8G')
     if args.sub == 'create' or args.sub == 'add':
-        if not os.path.isfile(args.image) and args.sub == 'add':
-            print args.image, 'not found'
-            sys.exit(1)
-        mac = randomMAC()
-        if args.image in conn.listStoragePools():
-            if not args.volume: args.volume = args.name + '_vol'
-            image = createvol(args.name, imgsize, args.image, args.volume)
-            template = preptempl(args.name, mac, args.cpus, mem, image, 'block')
+        if args.sub == 'add':
+            if not os.path.isfile(args.image):
+                print args.image, 'not found'
+                sys.exit(1)
+        if args.sub == 'create':
+            imgsize = argcheck(args.size)
+            args.image = 'None'
         else:
-            try:
-                if not args.volume: args.volume = args.name + '.img'
-            except:
-                args.volume = args.image
-            image = createimg(args.name, imgsize, os.path.abspath(args.image), args.volume)
-            template = preptempl(args.name, mac, args.cpus, mem, image)
+            imgsize = 0
+        mac = randomMAC()
+        image, format = create_vol(args.name, imgsize, args.image, args.pool)
+        if is_lvm(args.pool):
+            dtype = 'block'
+        else:
+            dtype = 'file'
+        template = prepare_tmpl(args.name, mac, args.cpus, mem, image, format, dtype)
+#        else:
+#           try:
+#               if not args.volume: args.volume = args.name + '.img'
+#           except:
+#               args.volume = args.image
+#           image = createimg(args.name, imgsize, os.path.abspath(args.image), args.volume)
+#           template = preptempl(args.name, mac, args.cpus, mem, image)
         try:
             conn.defineXML(template)
             print args.name, 'created, you can start it now'
@@ -385,8 +412,8 @@ if __name__ == '__main__':
                     if vol in i[1]: pool = i[0]
                 try:
                     conn.storagePoolLookupByName(pool).storageVolLookupByName(vol).delete()
-                except:
-                    os.remove(pv)
+                except libvirt.LibvirtError:
+                    sys.exit(1)
         except libvirt.libvirtError:
             sys.exit(1)
         except OSError, e:
