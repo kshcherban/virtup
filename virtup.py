@@ -37,8 +37,8 @@ def is_lvm(pool):
 
 # Upload image into volume 
 def upload_vol(vol, src):
-    # Build stream object                                                            
-    stream = conn.newStream(0)                                                       
+    # Build stream object
+    stream = conn.newStream(0)
     def safe_send(data):                                                             
         while True:                                                                  
             ret = stream.send(data)                                                  
@@ -63,7 +63,8 @@ def upload_vol(vol, src):
         #            text=("Transferring %s") % os.path.basename(src))
         print 'Uploading template into volume', vol.name()
         while True:
-            blocksize = (1024 ** 2)
+            #blocksize = (1024 ** 2)
+            blocksize = 256000
             data = fileobj.read(blocksize)
             if not data:
                 break                                                          
@@ -98,7 +99,7 @@ def create_vol(machname, imgsize, imgpath, stor):
     tmpl = '''
 <volume>
   <name>{0}</name>
-  <capacity unit='bytes'>{1}</capacity>
+  <capacity>{1}</capacity>
   <target>
     <path>{2}/{0}</path>
     <format type='{3}'/>
@@ -109,7 +110,7 @@ def create_vol(machname, imgsize, imgpath, stor):
 </volume>
 '''.format(machname, imgsize, spath, format)
     try:
-        v = s.createXML(tmpl)
+        v = s.createXML(tmpl, 0)
     except libvirt.libvirtError:
         sys.exit(1)
     if upload:
@@ -128,8 +129,7 @@ def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype):
     tmpl = '''
 <domain type='kvm'>
   <name>{0}</name>
-  <memory unit='B'>{1}</memory>
-  <currentMemory unit='B'>{1}</currentMemory>
+  <memory>{1}</memory>
   <vcpu placement='static'>{2}</vcpu>
   <os>
     <type arch='x86_64' machine='pc'>hvm</type>
@@ -227,9 +227,9 @@ def getip(mac):
 
 def argcheck(arg):
     if arg[-1].lower() == 'm':
-        return int(arg[:-1]) * (1024 ** 2)
+        return int(arg[:-1]) * 1024
     elif arg[-1].lower() == 'g':
-        return int(arg[:-1]) * (1024 ** 3)
+        return int(arg[:-1]) * (1024 ** 2)
     else:
         print 'Error! Format can be <int>M or <int>G'
         sys.exit(1)
