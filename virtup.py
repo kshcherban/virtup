@@ -35,19 +35,19 @@ def is_lvm(pool):
         return 1
     return 0
 
-# Upload image into volume 
+# Upload image into volume
 def upload_vol(vol, src):
     # Build stream object
     stream = conn.newStream(0)
-    def safe_send(data):                                                             
-        while True:                                                                  
-            ret = stream.send(data)                                                  
-            if ret == 0 or ret == len(data):                                         
-                break                                                                
-            data = data[ret:]                                                        
-    # Build placeholder volume                                                       
-    size = os.path.getsize(src)                                                      
-    basename = os.path.basename(src)                                                 
+    def safe_send(data):
+        while True:
+            ret = stream.send(data)
+            if ret == 0 or ret == len(data):
+                break
+            data = data[ret:]
+    # Build placeholder volume
+    size = os.path.getsize(src)
+    basename = os.path.basename(src)
     try:
         # Register upload
         offset = 0
@@ -63,22 +63,22 @@ def upload_vol(vol, src):
             blocksize = 256000
             data = fileobj.read(blocksize)
             if not data:
-                break                                                          
+                break
             safe_send(data)
             total += len(data)
-            sys.stderr.write('\rdone {0:.2%}'.format(float(total)/size)) 
-        # Cleanup                                                              
+            sys.stderr.write('\rdone {0:.2%}'.format(float(total)/size))
+        # Cleanup
         stream.finish()
         print('')
-    except:                                                                      
-        if vol:                                                            
+    except:
+        if vol:
             vol.delete(0)
         return 0
     return 1
 
 # Create storage volume
 def create_vol(machname, imgsize, imgpath, stor):
-    if os.path.isfile(imgpath): 
+    if os.path.isfile(imgpath):
         imgsize = os.path.getsize(imgpath)
         format = find_image_format(imgpath)
         upload = True
@@ -237,20 +237,24 @@ def argcheck(arg):
 
 def lsvirt(storage):
     if storage:
-        print '{0:<30}{1:<10}{2:<10}{3:<10}{4:<10}'.format('Pool name', 'Size', 
+        print '{0:<30}{1:<10}{2:<10}{3:<10}{4:<10}'.format('Pool name', 'Size',
             'Used', 'Avail', 'Use')
         for i in sorted(conn.listStoragePools()):
             p = conn.storagePoolLookupByName(i).info()
             use = '{0:.2%}'.format(float(p[2]) / float(p[1]))
-            print '{0:<30}{1:<10}{2:<10}{3:<10}{4:<10}'.format(i, convert_bytes(p[1]), 
+            print '{0:<30}{1:<10}{2:<10}{3:<10}{4:<10}'.format(i, convert_bytes(p[1]),
                 convert_bytes(p[2]), convert_bytes(p[3]), use)
         sys.exit(0)
     vsorted = [conn.lookupByID(i).name() for i in conn.listDomainsID()]
-    print '{0:<30}{1:>10}'.format('Name', 'State')
+    print '{0:<30}{1:<15}{2:<15}{3:>10}'.format('Name', 'CPUs', 'Memory', 'State')
     for i in sorted(vsorted):
-        print '{0:<30}{1:>10}'.format(i, 'up')
+        j = conn.lookupByName(i).info()
+        print '{0:<30}{1:<15}{2:<15}{3:>10}'.format(i, j[3], 
+            convert_bytes(j[2] * 1024), 'up')
     for i in sorted(conn.listDefinedDomains()):
-        print '{0:<30}{1:>10}'.format(i, 'down')
+        j = conn.lookupByName(i).info()
+        print '{0:<30}{1:<15}{2:<15}{3:>10}'.format(i, j[3], 
+            convert_bytes(j[2] * 1024), 'down')
     sys.exit(0)
 
 # Converting bytes to human-readable
@@ -282,50 +286,50 @@ subparsers = parser.add_subparsers(dest='sub')
 suparent = argparse.ArgumentParser(add_help=False)
 suparent.add_argument('name', type=str, help='virtual machine name')
 parent = argparse.ArgumentParser(add_help=False)
-parent.add_argument('-c', dest='cpus', type=int, default=1, 
+parent.add_argument('-c', dest='cpus', type=int, default=1,
         help='amount of CPU cores, default is 1')
-parent.add_argument('-net', dest='net', metavar='IFACE', type=str, default='default', 
+parent.add_argument('-net', dest='net', metavar='IFACE', type=str, default='default',
         help='bridge network interface name, default is NAT network "default"')
-parent.add_argument('-m', dest='mem', metavar='RAM', type=str, default='512M', 
+parent.add_argument('-m', dest='mem', metavar='RAM', type=str, default='512M',
         help='amount of memory, can be M or G, default is 512M')
-parent.add_argument('-p', dest='pool', metavar='POOL', type=str, 
+parent.add_argument('-p', dest='pool', metavar='POOL', type=str,
         default='default',
         help='storage pool name, default is "default"')
-box_add = subparsers.add_parser('add', parents=[parent, suparent], 
-        description='Add virtual machine from image file', 
+box_add = subparsers.add_parser('add', parents=[parent, suparent],
+        description='Add virtual machine from image file',
         help='Add virtual machine from image file')
 box_add.add_argument('-i', dest='image', type=str, metavar='IMAGE',
         required=True,
         help='template image file location')
-box_create = subparsers.add_parser('create', parents=[parent, suparent], 
-        description='Create virtual machine from scratch', 
+box_create = subparsers.add_parser('create', parents=[parent, suparent],
+        description='Create virtual machine from scratch',
         help='Create virtual machine')
-box_create.add_argument('-s', dest='size', type=str, default='8G', 
+box_create.add_argument('-s', dest='size', type=str, default='8G',
         help='disk image size, can be M or G, default is 8G')
-box_ls = subparsers.add_parser('ls', help='List virtual machines/storage pools', 
+box_ls = subparsers.add_parser('ls', help='List virtual machines/storage pools',
         description='List existing virtual machines and their state or active storage pools')
 box_ls.add_argument('-s', dest='storage', action='store_true',
         help='if specified active storage pools will be listed')
-box_rm = subparsers.add_parser('rm', parents=[suparent], 
-        description='Remove virtual machine', 
+box_rm = subparsers.add_parser('rm', parents=[suparent],
+        description='Remove virtual machine',
         help='Remove virtual machine')
-box_rm.add_argument('--full', action='store_true', 
+box_rm.add_argument('--full', action='store_true',
         help='remove machine with image assigned to it')
-box_start = subparsers.add_parser('up', parents=[suparent], 
-        description='Start virtual machine', 
+box_start = subparsers.add_parser('up', parents=[suparent],
+        description='Start virtual machine',
         help='Start virtual machine')
-box_stop = subparsers.add_parser('down', parents=[suparent], 
+box_stop = subparsers.add_parser('down', parents=[suparent],
         description='Power off virtual machine',
         help='Power off virtual machine')
-box_suspend = subparsers.add_parser('suspend', parents=[suparent], 
+box_suspend = subparsers.add_parser('suspend', parents=[suparent],
         help='Suspend virtual machine',
         description='Suspend current state of virtual machine to disk')
-box_suspend.add_argument('-f', metavar='FILE', 
+box_suspend.add_argument('-f', metavar='FILE',
         help='file where machine state will be saved, default is ./<name>.sav')
 box_resume = subparsers.add_parser('resume', parents=[suparent],
         help='Resume virtual machine',
         description='Resume virtual machine from file')
-box_resume.add_argument('-f', metavar='FILE',  
+box_resume.add_argument('-f', metavar='FILE',
         help='file from which machine state will be resumed, default is ./<name>.sav')
 help_c = subparsers.add_parser('help')
 help_c.add_argument('command', nargs="?", default=None)
@@ -364,7 +368,7 @@ if __name__ == '__main__':
             dtype = 'block'
         else:
             dtype = 'file'
-        template = prepare_tmpl(args.name, mac, args.cpus, mem, image, format, 
+        template = prepare_tmpl(args.name, mac, args.cpus, mem, image, format,
             dtype, args.net)
         try:
             conn.defineXML(template)
@@ -401,7 +405,7 @@ if __name__ == '__main__':
             print args.name, 'removed'
             if args.full:
                 pv = xe.find('.//devices/disk').find('source').get('file')
-                if not pv: 
+                if not pv:
                     pv = xe.find('.//devices/disk').find('source').get('dev')
                 vol = pv.split('/')[-1]
                 sp = {}
@@ -444,4 +448,4 @@ if __name__ == '__main__':
             print args.name, 'resumed from', args.f
         except libvirt.libvirtError:
             sys.exit(1)
-    
+
