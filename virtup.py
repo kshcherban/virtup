@@ -118,7 +118,11 @@ def create_vol(machname, imgsize, imgpath, stor):
     return spath + '/' + machname, format
 
 # Prepare template to import with virsh
-def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype):
+def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype, net):
+    if net == 'default':
+        ntype = 'network'
+    else:
+        ntype = 'bridge'
     if dtype == 'file':
         src = 'file'
     else:
@@ -157,9 +161,9 @@ def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype):
     <controller type='ide' index='0'>
       <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x1'/>
     </controller>
-    <interface type='network'>
+    <interface type='{8}'>
       <mac address='{5}'/>
-      <source network='default'/>
+      <source {8}='{9}'/>
       <model type='virtio'/>
       <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
     </interface>
@@ -183,7 +187,7 @@ def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype):
       <address type='pci' domain='0x0000' bus='0x00' slot='0x06' function='0x0'/>
     </memballoon>
   </devices>
-</domain> '''.format(machname, mem, cpu, format, img, mac, dtype, src)
+</domain> '''.format(machname, mem, cpu, format, img, mac, dtype, src, ntype, net)
     tmpf = '/tmp/' + machname + '.xml'
     f = open(tmpf, 'w')
     f.write(tmpl)
@@ -280,6 +284,8 @@ suparent.add_argument('name', type=str, help='virtual machine name')
 parent = argparse.ArgumentParser(add_help=False)
 parent.add_argument('-c', dest='cpus', type=int, default=1, 
         help='amount of CPU cores, default is 1')
+parent.add_argument('-net', dest='net', metavar='IFACE', type=str, default='default', 
+        help='bridge network interface name, default is NAT network "default"')
 parent.add_argument('-m', dest='mem', metavar='RAM', type=str, default='512M', 
         help='amount of memory, can be M or G, default is 512M')
 parent.add_argument('-p', dest='pool', metavar='POOL', type=str, 
@@ -358,7 +364,8 @@ if __name__ == '__main__':
             dtype = 'block'
         else:
             dtype = 'file'
-        template = prepare_tmpl(args.name, mac, args.cpus, mem, image, format, dtype)
+        template = prepare_tmpl(args.name, mac, args.cpus, mem, image, format, 
+            dtype, args.net)
         try:
             conn.defineXML(template)
             print args.name, 'created, you can start it now'
