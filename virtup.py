@@ -417,22 +417,21 @@ if __name__ == '__main__':
         try:
             dom = conn.lookupByName(args.name)
             if not args.f:
-                args.f = './' + args.name + '.sav'
+                if args.uri != 'qemu:///system':
+                    print 'Option -f is required for remote connection'
+                    sys.exit(1)
+                args.f = args.name + '.sav'
             dom.save(args.f)
-            print args.name, 'suspended to', args.f
+            print args.name, 'suspended into', args.f
         except:
             sys.exit(1)
 # Resume section
     if args.sub == 'resume':
-        saved = './' + args.name + '.sav'
-        if not args.f and not os.path.isfile(saved):
-            print 'Resume file not provided and default saved not found'
-            sys.exit(1)
-        elif not args.f:
-            args.f = saved
-        if not os.path.isfile(args.f):
-            print args.f, 'not found'
-            sys.exit(1)
+        if not args.f:
+            if args.uri != 'qemu:///system':
+                print 'Option -f is required for remote connection'
+                sys.exit(1)
+            args.f = args.name + '.sav'
         try:
             conn.restore(args.f)
             print args.name, 'resumed from', args.f
