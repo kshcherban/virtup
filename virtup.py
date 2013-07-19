@@ -2,11 +2,13 @@
 # -*- coding: utf-8 -*-
 
 import os
+import re
 import sys
 import time
 import random
 import libvirt
 import argparse
+from multiprocessing import Pool
 from xml.etree import ElementTree as ET
 
 # Generate random MAC address
@@ -117,6 +119,133 @@ def create_vol(machname, imgsize, imgpath, stor):
             sys.exit(1)
     return spath + '/' + machname, format
 
+
+class Net:
+    """Contains network based procedures, provides method to obtain virtual
+    machine ip address from hypervisor arp cache.
+    Takes virtual machine name and libvirt connection object arguments
+    """
+    def __init__(self, conn, machname):
+        self.conn = conn
+        self.machname = machname
+
+    def mac(self):
+        """Return virtual machine MAC address"""
+        xe = ET.fromstring(self.conn.lookupByName(self.machname).XMLDesc(0))
+        for iface in xe.findall('.//devices/interface'):
+            mac = iface.find('mac').get('address')
+        return mac
+
+    @staticmethod
+    def arp2ip(mac):
+        """Read arp cache and extracts ip address that corresponds virtual machine
+        MAC"""
+        f = open('/proc/net/arp', 'r')
+        for i in f.readlines():
+            if mac in i:
+                return i.split()[0]
+        f.close()
+        return 0
+
+    def get_ifname(self):
+        """Extract network interface name from domain XML decription"""
+        dom = self.conn.lookupByName(self.machname).XMLDesc(0)
+        net = ET.fromstring(dom).find('.//interface/source').get('network')
+        if not net:
+            return ET.fromstring(dom).find('.//interface/source').get('bridge')
+        ifname = ET.fromstring(self.conn.networkLookupByName(net).XMLDesc(0)
+            ).find('.//bridge').get('name')
+        return ifname
+    
+    @staticmethod
+    def get_subnet(ifname):
+        """Return CIDR got from /bin/ip output"""
+        patt = re.compile(r'inet\s*(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/\d{1,3})')
+        return patt.findall(os.popen('ip a s ' + ifname).read())[0]
+
+    @staticmethod 
+    def long2ip(l):
+        """Convert a network byte order 32-bit integer to a dotted quad ip
+        address.
+        """
+        MAX_IP = 0xffffffff
+        MIN_IP = 0x0
+        if MAX_IP < l or l < MIN_IP:
+            raise TypeError(
+            "expected int between %d and %d inclusive" % (MIN_IP, MAX_IP))
+        return '%d.%d.%d.%d' % (l >> 24 & 255, l >> 16 & 255, l >> 8 & 255, l & 255)
+    
+    @staticmethod
+    def ip2long(ip):
+        """Convert a dotted-quad ip address to a network byte order 32-bit
+        integer.
+        :param ip: Dotted-quad ip address (eg. '127.0.0.1').
+        :type ip: str
+        :returns: Network byte order 32-bit integer or ``None`` if ip is invalid.
+        """
+        quads = ip.split('.')
+        if len(quads) == 1:
+            # only a network quad
+            quads = quads + [0, 0, 0]
+        elif len(quads) < 4:
+            # partial form, last supplied quad is host address, rest is network
+            host = quads[-1:]
+            quads = quads[:-1] + [0, ] * (4 - len(quads)) + host
+        lngip = 0
+        for q in quads:
+            lngip = (lngip << 8) | int(q)
+        return lngip
+
+    def cidr2block(self, cidr):
+        """Convert a CIDR notation ip address into a tuple containing the network
+        block start and end addresses.
+        """
+        ip, prefix = self.ip2long(cidr.split('/')[0]), int(cidr.split('/')[-1])
+        # keep left most prefix bits of ip
+        shift = 32 - prefix
+        block_start = ip >> shift << shift
+        # expand right most 32 - prefix bits to 1
+        mask = (1 << shift) - 1
+        block_end = block_start | mask
+        return (self.long2ip(block_start), self.long2ip(block_end))
+
+    @staticmethod
+    def block2range(start, end):
+        """Convert network block start and end address into a range of network
+        addresses
+        """
+        for j in range(1,5):
+            globals()["oct" + str(j)] = [i for i in range(int(start.split('.')[j-1]),
+                int(end.split('.')[j-1]) + 1)]
+        iprange = []
+        for i in oct1:
+            for j in oct2:
+                for m in oct3:
+                    for n in oct4:
+                        iprange.append(str(i)+'.'+str(j)+'.'+str(m)+'.'+str(n))
+        return iprange
+
+
+    def ip(self):
+        """Get virtual machine ip address"""
+        ipaddr = self.arp2ip(self.mac())
+        if ipaddr:
+            return ipaddr
+        pool = Pool(processes=50)
+        cidr = self.get_subnet(self.get_ifname())
+        iprange = self.block2range(self.cidr2block(cidr)[0], self.cidr2block(cidr)[1])
+        pool.map(ping, iprange, 1)
+        pool.close()
+        pool.join()
+        return self.arp2ip(self.mac())
+
+
+def ping(ip):
+    """Ping ip"""
+    if ip.split('.')[-1] != '0' and ip.split('.')[-1] != '255':
+        os.popen("ping -q -c1 " + ip + ' 2>/dev/null')
+        return 0
+
 # Prepare template to import with virsh
 def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype, net):
     if net == 'default':
@@ -194,13 +323,6 @@ def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype, net):
     f.close()
     print 'Temporary template written in', tmpf
     return tmpl
-
-# Get MAC address of virtual domain
-def getmac(dom):
-    xe = ET.fromstring(dom.XMLDesc(0))
-    for iface in xe.findall('.//devices/interface'):
-        mac = iface.find('mac').get('address')
-    return mac
 
 # Get IP address of running machine
 def getip(mac):
@@ -382,8 +504,12 @@ if __name__ == '__main__':
             s = dom.create()
             if s == 0:
                 print args.name, 'started'
-            ip = getip(getmac(dom))
-            print 'You can connect to running machine at', ip
+            #ip = getip(getmac(dom))
+            if args.uri == 'qemu:///system':
+                print 'Waiting for ip...'
+                time.sleep(10)
+                ip = Net(conn, args.name).ip()
+                print ip
         except libvirt.libvirtError:
             sys.exit(1)
 # Down section
@@ -414,8 +540,8 @@ if __name__ == '__main__':
                 for i in sp.iteritems():
                     if vol in i[1]: pool = i[0]
                 try:
-                    conn.storagePoolLookupByName(pool).storageVolLookupByName(vol).delete()
-                except libvirt.LibvirtError:
+                    conn.storagePoolLookupByName(pool).storageVolLookupByName(vol).delete(0)
+                except libvirt.libvirtError:
                     sys.exit(1)
         except libvirt.libvirtError:
             sys.exit(1)
