@@ -125,13 +125,12 @@ class Net:
     machine ip address from hypervisor arp cache.
     Takes virtual machine name and libvirt connection object arguments
     """
-    def __init__(self, conn, machname):
+    def __init__(self, conn):
         self.conn = conn
-        self.machname = machname
 
-    def mac(self):
+    def mac(self, machname):
         """Return virtual machine MAC address"""
-        xe = ET.fromstring(self.conn.lookupByName(self.machname).XMLDesc(0))
+        xe = ET.fromstring(self.conn.lookupByName(machname).XMLDesc(0))
         for iface in xe.findall('.//devices/interface'):
             mac = iface.find('mac').get('address')
         return mac
@@ -147,9 +146,9 @@ class Net:
         f.close()
         return 0
 
-    def get_ifname(self):
+    def ifname(self, machname):
         """Extract network interface name from domain XML decription"""
-        dom = self.conn.lookupByName(self.machname).XMLDesc(0)
+        dom = self.conn.lookupByName(machname).XMLDesc(0)
         net = ET.fromstring(dom).find('.//interface/source').get('network')
         if not net:
             return ET.fromstring(dom).find('.//interface/source').get('bridge')
@@ -225,19 +224,18 @@ class Net:
                         iprange.append(str(i)+'.'+str(j)+'.'+str(m)+'.'+str(n))
         return iprange
 
-
-    def ip(self):
+    def ip(self, machname):
         """Get virtual machine ip address"""
-        ipaddr = self.arp2ip(self.mac())
+        ipaddr = self.arp2ip(self.mac(machname))
         if ipaddr:
             return ipaddr
         pool = Pool(processes=50)
-        cidr = self.get_subnet(self.get_ifname())
+        cidr = self.get_subnet(self.ifname(machname))
         iprange = self.block2range(self.cidr2block(cidr)[0], self.cidr2block(cidr)[1])
         pool.map(ping, iprange, 1)
         pool.close()
         pool.join()
-        return self.arp2ip(self.mac())
+        return self.arp2ip(self.mac(machname))
 
 
 def ping(ip):
@@ -323,30 +321,6 @@ def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype, net):
     f.close()
     print 'Temporary template written in', tmpf
     return tmpl
-
-# Get IP address of running machine
-def getip(mac):
-    try:
-        lease = open('/var/lib/libvirt/dnsmasq/default.leases', 'r')
-    except:
-        print "Can't open /var/lib/libvirt/dnsmasq/default.leases"
-        sys.exit(1)
-    t = 0
-    ip = None
-    print 'Waiting for machine\'s ip...'
-    while t < 60:
-        lease = open('/var/lib/libvirt/dnsmasq/default.leases', 'r')
-        for i in lease.readlines():
-            if mac in i:
-                ip = i.split()[2]
-                t = 60
-                break
-        time.sleep(1)
-        lease.close()
-        t += 1
-    if not ip:
-        return 'not found'
-    return ip
 
 def argcheck(arg):
     if arg[-1].lower() == 'm':
@@ -504,12 +478,12 @@ if __name__ == '__main__':
             s = dom.create()
             if s == 0:
                 print args.name, 'started'
-            #ip = getip(getmac(dom))
             if args.uri == 'qemu:///system':
                 print 'Waiting for ip...'
                 time.sleep(10)
-                ip = Net(conn, args.name).ip()
-                print ip
+                ip = Net(conn).ip(args.name)
+                if ip:
+                    print ip
         except libvirt.libvirtError:
             sys.exit(1)
 # Down section
