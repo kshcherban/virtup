@@ -480,7 +480,7 @@ if __name__ == '__main__':
                 print args.name, 'started'
             if args.uri == 'qemu:///system':
                 print 'Waiting for ip...'
-                time.sleep(10)
+                time.sleep(20)
                 ip = Net(conn).ip(args.name)
                 if ip:
                     print ip
