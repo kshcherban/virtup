@@ -24,37 +24,37 @@ If you would like to use external host as hypervisor, then install only requirem
 ### CentOS/Fedora
     sudo yum install qemu-kvm libvirt libvirt-python
 
-    1\. Download one of prebuild boxes from [here](http://yadi.sk/d/KJROKkGb6Xv7u)
+1\. Download one of prebuild boxes from [here](http://yadi.sk/d/KJROKkGb6Xv7u)
 
-    ```wget https://dl.dropboxusercontent.com/s/0l9wvtnzsl69hx0/ubuntu-12.04-amd64.img.tar.gz```
+```wget https://dl.dropboxusercontent.com/s/0l9wvtnzsl69hx0/ubuntu-12.04-amd64.img.tar.gz```
 
-    2\. Unpack it
+2\. Unpack it
 
-    ```tar -xzf ubuntu-12.04-amd64.img.tar.gz```
+```tar -xzf ubuntu-12.04-amd64.img.tar.gz```
 
-    3\. Import it with preferred name, optionally memory, cpu, net and storage pool can be
-    specified
+3\. Import it with preferred name, optionally memory, cpu, net and storage pool can be
+specified
 
-    ```
-    ./virtup.py add -i ubuntu64.img ubuntu64
-    Uploading template into volume ubuntu64
-    done 100.00%
-    Temporary template written in /tmp/ubuntu64.xml
-    ubuntu64 created, you can start it now
-    ```
+```
+./virtup.py add -i ubuntu64.img ubuntu64
+Uploading template into volume ubuntu64
+done 100.00%
+Temporary template written in /tmp/ubuntu64.xml
+ubuntu64 created, you can start it now
+```
 
-    4\. And start it
+4\. And start it
 
-    ```
-    ./virtup.py up ubuntu64
-    ubuntu64 started
-    Waiting for ip...
-    192.168.122.250
-    ```
+```
+./virtup.py up ubuntu64
+ubuntu64 started
+Waiting for ip...
+192.168.122.250
+```
 
-    5\. Ssh into newly created machine. Template used in example has passswordless ssh root login.
+5\. Ssh into newly created machine. Template used in example has passswordless ssh root login.
 
-        ssh root@192.168.122.250
+    ssh root@192.168.122.250
 
 ## Templates creation
 Create virtual machine with ```create``` command or with virsh.  
