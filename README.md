@@ -13,26 +13,27 @@ Python >= 2.7 <= 3
 libvirt Python API bindings
 
 ## Quick start
-If you plan to deploy virtual machines on local host, then you should install 
-libvirtd and requirements. Also ensure that your host is KVM capable.
+To deploy virtual machines on local host, you should install 
+libvirtd and requirements. Also ensure that your host is KVM capable.  
+If you would like to use external host as hypervisor, then install only requirements.  
+You can have running guest in six steps.
 
-If you would like to use external host as hypervisor, then install only requirements.
-
-### Ubuntu/Debian
+1\. Install requirements
+**Ubuntu/Debian**
     sudo apt-get install libvirt-bin python-libvirt
 
-### CentOS/Fedora
+**CentOS/Fedora**
     sudo yum install qemu-kvm libvirt libvirt-python
 
-1\. Download one of prebuild boxes from [here](http://yadi.sk/d/KJROKkGb6Xv7u)
+2\. Download one of prebuild boxes from [here](http://yadi.sk/d/KJROKkGb6Xv7u)
 
 ```wget https://dl.dropboxusercontent.com/s/0l9wvtnzsl69hx0/ubuntu-12.04-amd64.img.tar.gz```
 
-2\. Unpack it
+3\. Unpack it
 
 ```tar -xzf ubuntu-12.04-amd64.img.tar.gz```
 
-3\. Import it with preferred name, optionally memory, cpu, net and storage pool can be
+4\. Import it with preferred name, optionally memory, cpu, net and storage pool can be
 specified
 
 ```
@@ -43,7 +44,7 @@ Temporary template written in /tmp/ubuntu64.xml
 ubuntu64 created, you can start it now
 ```
 
-4\. And start it
+5\. Start it
 
 ```
 ./virtup.py up ubuntu64
@@ -52,7 +53,7 @@ Waiting for ip...
 192.168.122.250
 ```
 
-5\. Ssh into newly created machine. Template used in example has passswordless ssh root login.
+6\. Ssh into newly created machine. Template used in example has passswordless ssh root login.
 
     ssh root@192.168.122.250
 
