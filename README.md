@@ -19,11 +19,11 @@ If you would like to use external host as hypervisor, then install only requirem
 You can have running guest in six steps.
 
 1\. Install requirements  
-**Ubuntu/Debian**
-    sudo apt-get install libvirt-bin python-libvirt
+**Ubuntu/Debian**  
+```sudo apt-get install libvirt-bin python-libvirt```
 
 **CentOS/Fedora**  
-    sudo yum install qemu-kvm libvirt libvirt-python
+```sudo yum install qemu-kvm libvirt libvirt-python```
 
 2\. Download one of prebuild boxes from [here](http://yadi.sk/d/KJROKkGb6Xv7u)
 
