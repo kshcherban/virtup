@@ -307,7 +307,7 @@ def find_image_format(filepath):
         return 'qcow2'
     if 'Virtual Disk Image' in f:
         return 'vdi'
-    if 'virtualHWVersion' in f:
+    if 'virtualHWVersion' or 'KDMV' in f:
         return 'vmdk'
     return 'raw'
 
