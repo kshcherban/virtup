@@ -544,23 +544,24 @@ help_c.add_argument('command', nargs="?", default=None)
 
 
 if __name__ == '__main__':
+# Help command emulation
     if len(sys.argv) < 2:
         parser.parse_args(['--help'])
     args = parser.parse_args()
-# Help command emulation
     if args.sub == "help":
         if not args.command:
             parser.parse_args(['--help'])
         else:
             parser.parse_args([args.command, '--help'])
     conn = libvirt.open(args.uri)
-    try: mem = argcheck(args.mem)
-    except: pass
+
 # Ls command section
     if args.sub == 'ls':
         lsvirt(args.storage)
+
 # Add and Create section
     if args.sub == 'create' or args.sub == 'add':
+        mem = argcheck(args.mem)
         if args.sub == 'add':
             if not os.path.isfile(args.image):
                 print args.image, 'not found'
@@ -591,6 +592,7 @@ if __name__ == '__main__':
             print args.name, 'created, you can start it now'
         except libvirt.libvirtError:
             sys.exit(1)
+
 # Up section
     if args.sub == 'up':
         try:
@@ -606,6 +608,7 @@ if __name__ == '__main__':
                     print ip
         except libvirt.libvirtError:
             sys.exit(1)
+
 # Down section
     if args.sub == 'down':
         try:
@@ -613,9 +616,9 @@ if __name__ == '__main__':
             s = dom.destroy()
             if s == 0:
                 print args.name, 'powered off'
-                sys.exit(0)
         except libvirt.libvirtError:
             sys.exit(1)
+
 # Rm section
     if args.sub == 'rm':
         pool = get_stor(args.name)
@@ -628,7 +631,6 @@ if __name__ == '__main__':
         if args.full:
             Disk(conn, pool).delete_vol(vol)
             print 'Volume {0} removed'.format(vol)
-        sys.exit(0)
 
 # Suspend section
     if args.sub == 'suspend':
