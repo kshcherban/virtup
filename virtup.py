@@ -24,91 +24,16 @@ import argparse
 from multiprocessing import Pool
 from xml.etree import ElementTree as ET
 
-# Generate random MAC address
-def randomMAC():
-    mac = [ 0x00, 0x16, 0x3e,
-        random.randint(0x00, 0x7f),
-        random.randint(0x00, 0xff),
-        random.randint(0x00, 0xff) ]
-    return ':'.join(map(lambda x: "%02x" % x, mac))
 
-# Guess image type
-def find_image_format(filepath):
-    f = open(filepath).read(1024)
-    if 'QFI' in f:
-        return 'qcow2'
-    if 'Virtual Disk Image' in f:
-        return 'vdi'
-    if 'virtualHWVersion' in f:
-        return 'vmdk'
-    return 'raw'
-
-# Check if storage pool is LVM or dir
-def is_lvm(pool):
-    s = conn.storagePoolLookupByName(pool)
-    if ET.fromstring(s.XMLDesc(0)).get('type') == 'logical':
-        return 1
-    return 0
-
-# Upload image into volume
-def upload_vol(vol, src):
-    # Build stream object
-    stream = conn.newStream(0)
-    def safe_send(data):
-        while True:
-            ret = stream.send(data)
-            if ret == 0 or ret == len(data):
-                break
-            data = data[ret:]
-    # Build placeholder volume
-    size = os.path.getsize(src)
-    basename = os.path.basename(src)
-    try:
-        # Register upload
-        offset = 0
-        length = size
-        flags = 0
-        stream.upload(vol, offset, length, flags)
-        # Open source file
-        fileobj = file(src, "r")
-        # Start transfer
-        total = 0
-        print 'Uploading template into volume', vol.name()
-        while True:
-            blocksize = 256000
-            data = fileobj.read(blocksize)
-            if not data:
-                break
-            safe_send(data)
-            total += len(data)
-            sys.stderr.write('\rdone {0:.2%}'.format(float(total)/size))
-        # Cleanup
-        stream.finish()
-        print('')
-    except:
-        if vol:
-            vol.delete(0)
-        return 0
-    return 1
-
-# Create storage volume
-def create_vol(machname, imgsize, imgpath, stor):
-    if os.path.isfile(imgpath):
-        imgsize = os.path.getsize(imgpath)
-        format = find_image_format(imgpath)
-        upload = True
-    else:
-        imgsize = imgsize * 1024
-        format = 'raw'
-        upload = False
-    try:
-        s = conn.storagePoolLookupByName(stor)
-    except libvirt.libvirtError:
-        sys.exit(1)
-    xe = ET.fromstring(s.XMLDesc(0))
-    # find storage pool path
-    spath = [i for i in xe.find('.//path').itertext()][0]
-    tmpl = '''
+class Disk:
+    """Contains disk based procedures, provides methods to create, delete,
+    download, upload volumes.
+    Takes storage pool name and libvirt connection object as arguments
+    """
+    def __init__(self, conn, pool):
+        self.conn = conn
+        self.pool = pool
+        self.voltmpl = '''
 <volume>
   <name>{0}</name>
   <capacity>{1}</capacity>
@@ -120,17 +45,124 @@ def create_vol(machname, imgsize, imgpath, stor):
     </permissions>
   </target>
 </volume>
-'''.format(machname, imgsize, spath, format)
-    try:
-        v = s.createXML(tmpl, 0)
-    except libvirt.libvirtError:
-        sys.exit(1)
-    if upload:
-        upres = upload_vol(v, imgpath)
-        if not upres:
-            print 'Error importing template into storage pool'
+'''
+
+    def vol_obj(self, obj):
+        """Return volume object independently of what provided: 
+        volume object or name"""
+        if not isinstance(obj, str):
+            return obj
+        p = self.pool
+        try:
+            vol = self.conn.storagePoolLookupByName(p).storageVolLookupByName(obj)
+            return vol
+        except libvirt.libvirtError:
             sys.exit(1)
-    return spath + '/' + machname, format
+
+    def create_vol(self, name, imgsize, imgtype):
+        """Create volume in specified pool with specified name, size, format
+        and pool. Return full path to created volume"""
+        try:
+            s = self.conn.storagePoolLookupByName(self.pool)
+        except libvirt.libvirtError:
+            sys.exit(1)
+        xe = ET.fromstring(s.XMLDesc(0))
+        # find storage pool path
+        spath = xe.find('.//path').text
+        tmpl = self.voltmpl.format(name, imgsize, spath, imgtype)
+        try:
+            v = s.createXML(tmpl, 0)
+        except libvirt.libvirtError:
+            sys.exit(1)
+        return spath + '/' + name
+
+    def delete_vol(self, vol):
+        """Delete volume by name"""
+        try:
+            p = self.conn.storagePoolLookupByName(self.pool)
+            p.storageVolLookupByName(vol).delete(0)
+        except libvirt.libvirtError:
+            sys.exit(1)
+        return 1
+
+    def download_vol(self, vol, src):
+        """Download specified volume by name into specified file"""
+        # Get volume object
+        vol = self.vol_obj(vol)
+        # Build stream object
+        stream = self.conn.newStream(0)
+        # Get volume size
+        size = vol.info()[1]
+        # Register download
+        offset = 0
+        length = size
+        flags = 0
+        stream.download(vol, offset, length, flags)
+        # Open file
+        f = open(src, 'w')
+        # Start transfer
+        total = 0
+        print 'Downloading volume {0} into {1}'.format(vol.name(), 
+                os.path.abspath(src))
+        try:
+            while True:
+                ret = stream.recv(256000)
+                if not ret:
+                    break
+                f.write(ret)
+                total += len(ret)
+                sys.stderr.write('\rdone {0:.2%}'.format(float(total)/size))
+            # Cleanup
+            stream.finish()
+            f.close()
+            print('')
+            return 1
+        except libvirt.libvirtError:
+            os.remove(src)
+            print('Error uploading file')
+            return 0
+
+    def upload_vol(self, vol, src):
+        """Upload image into specified volume"""
+        vol = self.vol_obj(vol)
+        # Build stream object
+        stream = self.conn.newStream(0)
+        def safe_send(data):
+            while True:
+                ret = stream.send(data)
+                if ret == 0 or ret == len(data):
+                    break
+                data = data[ret:]
+        # Build placeholder volume
+        size = os.path.getsize(src)
+        try:
+            # Register upload
+            offset = 0
+            length = size
+            flags = 0
+            stream.upload(vol, offset, length, flags)
+            # Open source file
+            fileobj = open(src, "r")
+            # Start transfer
+            total = 0
+            print 'Uploading volume {0} from {1}'.format(vol.name(),
+                    os.path.abspath(src))
+            while True:
+                blocksize = 256000
+                data = fileobj.read(blocksize)
+                if not data:
+                    break
+                safe_send(data)
+                total += len(data)
+                sys.stderr.write('\rdone {0:.2%}'.format(float(total)/size))
+            # Cleanup
+            stream.finish()
+            print('')
+        except:
+            if vol:
+                vol.delete(0)
+            return 0
+        return 1
 
 
 class Net:
@@ -256,6 +288,65 @@ def ping(ip):
     if ip.split('.')[-1] != '0' and ip.split('.')[-1] != '255':
         os.popen("ping -q -c1 " + ip + ' 2>/dev/null')
         return 0
+
+# Generate random MAC address
+def randomMAC():
+    mac = [ 0x00, 0x16, 0x3e,
+        random.randint(0x00, 0x7f),
+        random.randint(0x00, 0xff),
+        random.randint(0x00, 0xff) ]
+    return ':'.join(map(lambda x: "%02x" % x, mac))
+
+# Guess image type
+def find_image_format(filepath):
+    try:
+        f = open(filepath).read(1024)
+    except:
+        return 'raw'
+    if 'QFI' in f:
+        return 'qcow2'
+    if 'Virtual Disk Image' in f:
+        return 'vdi'
+    if 'virtualHWVersion' in f:
+        return 'vmdk'
+    return 'raw'
+
+# Check if storage pool is LVM or dir
+def is_lvm(pool):
+    s = conn.storagePoolLookupByName(pool)
+    if ET.fromstring(s.XMLDesc(0)).get('type') == 'logical':
+        return 1
+    return 0
+
+# Get pool or volume name for given guest
+def get_stor(machname, pool=True):
+    try:
+        dom = conn.lookupByName(machname)
+    except libvirt.libvirtError:
+        sys.exit(1)
+    xe = ET.fromstring(dom.XMLDesc(0))
+    path = xe.find('.//devices/disk/source').get('file')
+    if not path:
+        path = xe.find('.//devices/disk/source').get('dev')
+    if pool:
+        path = '/'.join(path.split('/')[:-1])
+        data = conn.listStoragePools()
+    else:
+        data = {}
+        for i in conn.listStoragePools():
+            data[i] = conn.storagePoolLookupByName(i).listVolumes()
+    if isinstance(data, list):
+        for p in data:
+            o = conn.storagePoolLookupByName(p)
+            if ET.fromstring(o.XMLDesc(0)).find('.//path').text == path:
+                return p
+    else:
+        for i in data.iteritems():
+            for v in i[1]:
+                o = conn.storagePoolLookupByName(i[0]).storageVolLookupByName(v)
+                if ET.fromstring(o.XMLDesc(0)).find('.//path').text == path:
+                    return v
+    return None
 
 # Prepare template to import with virsh
 def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype, net):
@@ -385,6 +476,7 @@ def convert_bytes(bytes):
         size = '%.2fb' % bytes
     return size
 
+
 # Here we parse all the commands
 parser = argparse.ArgumentParser(prog='virtup.py')
 parser.add_argument('-u', '--uri', type=str, default='qemu:///system',
@@ -436,7 +528,7 @@ box_suspend = subparsers.add_parser('suspend', parents=[suparent],
 box_suspend.add_argument('-f', metavar='FILE',
         help='file where machine state will be saved, default is ./<name>.sav')
 box_resume = subparsers.add_parser('resume', parents=[suparent],
-        help='Resume virtual machine',
+        help='Resume l machine',
         description='Resume virtual machine from file')
 box_resume.add_argument('-f', metavar='FILE',
         help='file from which machine state will be resumed, default is ./<name>.sav')
@@ -466,13 +558,21 @@ if __name__ == '__main__':
             if not os.path.isfile(args.image):
                 print args.image, 'not found'
                 sys.exit(1)
+            format = find_image_format(args.image)
+            imgsize = os.path.getsize(args.image)
+            upload = True
         if args.sub == 'create':
-            imgsize = argcheck(args.size)
-            args.image = 'None'
-        else:
-            imgsize = 0
+            format = 'raw'
+            imgsize = argcheck(args.size) * 1024
+            args.image = args.name
+            upload = False
         mac = randomMAC()
-        image, format = create_vol(args.name, imgsize, args.image, args.pool)
+        image = Disk(conn, args.pool).create_vol(args.name, imgsize, format)
+        if upload:
+            ret = Disk(conn, args.pool).upload_vol(args.name, args.image)
+            if not ret:
+                print 'Upload failed. Exiting'
+                sys.exit(1)
         if is_lvm(args.pool):
             dtype = 'block'
         else:
@@ -511,31 +611,18 @@ if __name__ == '__main__':
             sys.exit(1)
 # Rm section
     if args.sub == 'rm':
+        pool = get_stor(args.name)
+        vol = get_stor(args.name, 0)
         try:
-            dom = conn.lookupByName(args.name)
-            xe = ET.fromstring(dom.XMLDesc(0))
-            dom.undefine()
+            conn.lookupByName(args.name).undefine()
             print args.name, 'removed'
-            if args.full:
-                pv = xe.find('.//devices/disk').find('source').get('file')
-                if not pv:
-                    pv = xe.find('.//devices/disk').find('source').get('dev')
-                vol = pv.split('/')[-1]
-                sp = {}
-                for i in conn.listStoragePools():
-                    sp[i] = conn.storagePoolLookupByName(i).listVolumes()
-                for i in sp.iteritems():
-                    if vol in i[1]: pool = i[0]
-                try:
-                    conn.storagePoolLookupByName(pool).storageVolLookupByName(vol).delete(0)
-                except libvirt.libvirtError:
-                    sys.exit(1)
         except libvirt.libvirtError:
             sys.exit(1)
-        except OSError, e:
-            print 'Can not remove assigned image'
-            print e
-            sys.exit(1)
+        if args.full:
+            Disk(conn, pool).delete_vol(vol)
+            print 'Volume {0} removed'.format(vol)
+        sys.exit(0)
+
 # Suspend section
     if args.sub == 'suspend':
         try:
