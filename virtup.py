@@ -119,7 +119,7 @@ class Disk:
             return 1
         except libvirt.libvirtError:
             os.remove(src)
-            print('Error uploading file')
+            print('Error downloading volume')
             return 0
 
     def upload_vol(self, vol, src):
@@ -507,6 +507,13 @@ box_create = subparsers.add_parser('create', parents=[parent, suparent],
         help='Create virtual machine')
 box_create.add_argument('-s', dest='size', type=str, default='8G',
         help='disk image size, can be M or G, default is 8G')
+box_export = subparsers.add_parser('export', parents=[suparent],
+        description='Export virtual machine description/disk image',
+        help='Export virtual machine')
+box_export.add_argument('-xml', dest='xml', action='store_true',
+        help='virtual machine XML description will be printed')
+box_export.add_argument('-i', dest='image', type=str,
+        help='image file name to export disk image')
 box_ls = subparsers.add_parser('ls', help='List virtual machines/storage pools',
         description='List existing virtual machines and their state or active storage pools')
 box_ls.add_argument('-s', dest='storage', action='store_true',
@@ -636,6 +643,7 @@ if __name__ == '__main__':
             print args.name, 'suspended into', args.f
         except:
             sys.exit(1)
+
 # Resume section
     if args.sub == 'resume':
         if not args.f:
@@ -649,3 +657,27 @@ if __name__ == '__main__':
         except libvirt.libvirtError:
             sys.exit(1)
 
+# Export section
+    if args.sub == 'export':
+        if args.xml:
+            try:
+                print conn.lookupByName(args.name).XMLDesc(0)
+            except libvirt.libvirtError:
+                sys.exit(1)
+        if not args.image:
+            sys.exit(0)
+        try:
+            f = open(args.image, 'w')
+            f.close()
+        except IOError, e:
+            print e
+            sys.exit(1)
+        pool = get_stor(args.name)
+        vol = get_stor(args.name, 0)
+        if not vol:
+            print 'Volume attached to {0} not found'.format(args.name)
+            sys.exit(1)
+        if Disk(conn, pool).download_vol(vol, args.image):
+            sys.exit(0)
+        else:
+            sys.exit(1)
