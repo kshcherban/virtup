@@ -307,7 +307,9 @@ def find_image_format(filepath):
         return 'qcow2'
     if 'Virtual Disk Image' in f:
         return 'vdi'
-    if 'virtualHWVersion' or 'KDMV' in f:
+    if 'virtualHWVersion' in f:
+        return 'vmdk'
+    elif 'KDMV' == open(filepath).read(4):
         return 'vmdk'
     return 'raw'
 
@@ -426,6 +428,28 @@ def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype, net):
     print 'Temporary template written in', tmpf
     return tmpl
 
+# Return modified xml from imported file ready for defining guest 
+def xml2tmpl(xmlf, machname, image=None, format=None, dtype=None):
+    xe = ET.fromstring(xmlf)
+    # Remove values that may cause error
+    try:
+        xe.remove(xe.find('.//currentMemory'))
+        xe.remove(xe.find('.//uuid'))
+        xe.find('.//devices').remove(xe.find('.//devices/emulator'))
+    except:
+        pass
+    # Replacing values
+    xe.find('.//name').text = machname
+    if image:
+        xe.find('.//devices/disk').set('type', dtype)
+        if dtype == 'file':
+            stype = 'file'
+        else:
+            stype = 'dev'
+        xe.find('.//devices/disk/driver').set('type', format)
+        xe.find('.//devices/disk/source').set(stype, image)
+    return ET.tostring(xe)
+
 def argcheck(arg):
     if arg[-1].lower() == 'm':
         return int(arg[:-1]) * 1024
@@ -500,8 +524,9 @@ box_add = subparsers.add_parser('add', parents=[parent, suparent],
         description='Add virtual machine from image file',
         help='Add virtual machine from image file')
 box_add.add_argument('-i', dest='image', type=str, metavar='IMAGE',
-        required=True,
         help='template image file location')
+box_add.add_argument('-xml', dest='xml', type=argparse.FileType('r'),
+        help='xml file, describing virtual machine to import')
 box_create = subparsers.add_parser('create', parents=[parent, suparent],
         description='Create virtual machine from scratch',
         help='Create virtual machine')
@@ -560,36 +585,63 @@ if __name__ == '__main__':
         lsvirt(args.storage)
 
 # Add and Create section
-    if args.sub == 'create' or args.sub == 'add':
+    if args.sub == 'add':
+        if not args.xml and not args.image:
+            print 'Either -xml or -i should be specified'
+            sys.exit(1)
         mem = argcheck(args.mem)
-        if args.sub == 'add':
+        mac = randomMAC()
+        if args.xml:
+            xml = args.xml.read()
+        if not args.image:
+            upload = False
+        else:
             if not os.path.isfile(args.image):
                 print args.image, 'not found'
                 sys.exit(1)
             format = find_image_format(args.image)
             imgsize = os.path.getsize(args.image)
             upload = True
-        if args.sub == 'create':
-            format = 'raw'
-            imgsize = argcheck(args.size) * 1024
-            args.image = args.name
-            upload = False
-        mac = randomMAC()
-        image = Disk(conn, args.pool).create_vol(args.name, imgsize, format)
+            image = Disk(conn, args.pool).create_vol(args.name, imgsize, format)
+            if is_lvm(args.pool):
+                dtype = 'block'
+            else:
+                dtype = 'file'
+            if args.xml:
+                template = xml2tmpl(xml, args.name, image, format, dtype)
+        if args.xml and not args.image:
+            template = xml2tmpl(xml, args.name)
+        elif not args.xml:
+            template = prepare_tmpl(args.name, mac, args.cpus, mem, image, format,
+                dtype, args.net)
+        try:
+            conn.defineXML(template)
+            print args.name, 'created, you can start it now'
+        except libvirt.libvirtError:
+            sys.exit(1)
         if upload:
             ret = Disk(conn, args.pool).upload_vol(args.name, args.image)
             if not ret:
                 print 'Upload failed. Exiting'
                 sys.exit(1)
+
+# Create section
+    if args.sub == 'create':
+        mem = argcheck(args.mem)
+        mac = randomMAC()
+        format = 'raw'
+        imgsize = argcheck(args.size) * 1024
+        args.image = args.name
         if is_lvm(args.pool):
             dtype = 'block'
         else:
             dtype = 'file'
+        image = Disk(conn, args.pool).create_vol(args.name, imgsize, format)
         template = prepare_tmpl(args.name, mac, args.cpus, mem, image, format,
             dtype, args.net)
         try:
             conn.defineXML(template)
-            print args.name, 'created, you can start it now'
+            print args.name, 'created'
         except libvirt.libvirtError:
             sys.exit(1)
 
@@ -661,6 +713,9 @@ if __name__ == '__main__':
 
 # Export section
     if args.sub == 'export':
+        if not args.xml and not args.image:
+            print 'Nothing to export'
+            sys.exit(1)
         if args.xml:
             try:
                 print conn.lookupByName(args.name).XMLDesc(0)
