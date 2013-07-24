@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python -u
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2013 Konstantin Shcherban <k.scherban@gmail.com>
@@ -17,8 +17,11 @@
 import os
 import re
 import sys
+import tty
 import time
 import random
+import termios
+import atexit
 import libvirt
 import argparse
 from multiprocessing import Pool
@@ -500,6 +503,27 @@ def convert_bytes(bytes):
         size = '%.2fb' % bytes
     return size
 
+# Functions to operate with terminal. Required for console option
+def reset_term():
+    termios.tcsetattr(0, termios.TCSADRAIN, attrs)
+
+def stdin_callback(watch, fd, events, unused):
+    global run_console
+    readbuf = os.read(fd, 1024)
+    if readbuf.startswith(""):
+        run_console = False
+        return
+    stream.send(readbuf)
+
+def stream_callback(stream, events, unused):
+    global run_console
+    if events & libvirt.VIR_EVENT_HANDLE_READABLE:
+        receivedData = stream.recv(1024)
+        if receivedData == "":
+            run_console = False
+            return
+        os.write(0, receivedData)
+
 
 # Here we parse all the commands
 parser = argparse.ArgumentParser(prog='virtup.py')
@@ -521,12 +545,15 @@ parent.add_argument('-p', dest='pool', metavar='POOL', type=str,
         default='default',
         help='storage pool name, default is "default"')
 box_add = subparsers.add_parser('add', parents=[parent, suparent],
-        description='Add virtual machine from image file',
-        help='Add virtual machine from image file')
+        description='Add virtual machine from image file or XML description',
+        help='Add virtual machine from image/XML file')
 box_add.add_argument('-i', dest='image', type=str, metavar='IMAGE',
         help='template image file location')
 box_add.add_argument('-xml', dest='xml', type=argparse.FileType('r'),
         help='xml file, describing virtual machine to import')
+console = subparsers.add_parser('console', parents=[suparent],
+        description='Connect to virtual machine\'s console',
+        help='Connect to console')
 box_create = subparsers.add_parser('create', parents=[parent, suparent],
         description='Create virtual machine from scratch',
         help='Create virtual machine')
@@ -578,6 +605,7 @@ if __name__ == '__main__':
             parser.parse_args(['--help'])
         else:
             parser.parse_args([args.command, '--help'])
+    libvirt.virEventRegisterDefaultImpl()
     conn = libvirt.open(args.uri)
 
 # Ls command section
@@ -738,3 +766,25 @@ if __name__ == '__main__':
             sys.exit(0)
         else:
             sys.exit(1)
+
+# Console section
+    if args.sub == 'console':
+        try:
+            dom = conn.lookupByName(args.name)
+        except libvirt.libvirtError:
+            sys.exit(1)
+        atexit.register(reset_term)
+        attrs = termios.tcgetattr(0)
+        tty.setraw(0)
+        stream = conn.newStream(libvirt.VIR_STREAM_NONBLOCK)
+        try:
+            dom.openConsole(None, stream, 0)
+        except libvirt.libvirtError:
+            sys.exit(1)
+        print 'Escape character is ^] press Enter'
+        run_console = True
+        stdin_watch = libvirt.virEventAddHandle(0, libvirt.VIR_EVENT_HANDLE_READABLE,
+                stdin_callback, None)
+        stream.eventAddCallback(libvirt.VIR_STREAM_EVENT_READABLE, stream_callback, None)
+        while run_console:
+                libvirt.virEventRunDefaultImpl()
