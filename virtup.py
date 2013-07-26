@@ -462,16 +462,41 @@ def argcheck(arg):
         print 'Error! Format can be <int>M or <int>G'
         sys.exit(1)
 
-def lsvirt(storage):
+def lsvirt(storage, volumes):
+    pools = sorted(conn.listStoragePools())
+    # List storage pools
     if storage:
         print '{0:<30}{1:<10}{2:<10}{3:<10}{4:<10}'.format('Pool name', 'Size',
             'Used', 'Avail', 'Use')
-        for i in sorted(conn.listStoragePools()):
+        for i in pools:
             p = conn.storagePoolLookupByName(i).info()
             use = '{0:.2%}'.format(float(p[2]) / float(p[1]))
             print '{0:<30}{1:<10}{2:<10}{3:<10}{4:<10}'.format(i, convert_bytes(p[1]),
                 convert_bytes(p[2]), convert_bytes(p[3]), use)
         sys.exit(0)
+    # List volumes
+    if volumes:
+        # Find list of machines and create dict with list of vols associated to them
+        ml = [conn.lookupByID(i).name() for i in conn.listDomainsID()] + conn.listDefinedDomains()
+        md = {}
+        for i in ml:
+            md[get_stor(i, 0)] = i
+        print '{0:<15}{1:<30}{2:<10}{3:<10}{4:<10}'.format('Pool', 'Volume', 'Size', 
+                'Use', 'Used by')
+        for p in pools:
+            pinf = conn.storagePoolLookupByName(p).info()
+            print p
+            print '{0:>15}'.format('\\')
+            vols = conn.storagePoolLookupByName(p).listVolumes()
+            for v in vols:
+                if v not in md:
+                    md[v] = None
+                vinf = conn.storagePoolLookupByName(p).storageVolLookupByName(v).info()
+                use = '{0:.2%}'.format(float(vinf[2]) / float(pinf[1])) 
+                print '{0:<15}{1:<30}{2:<10}{3:<10}{4:<10}'.format(' ', v, 
+                        convert_bytes(vinf[2]), use, md[v])
+        sys.exit(0)
+    # List machines
     vsorted = [conn.lookupByID(i).name() for i in conn.listDomainsID()]
     print '{0:<30}{1:<15}{2:<15}{3:>10}'.format('Name', 'CPUs', 'Memory', 'State')
     for i in sorted(vsorted):
@@ -572,6 +597,8 @@ box_ls.add_argument('-s', dest='storage', action='store_true',
         help='list active storage pools')
 box_ls.add_argument('-ip', dest='ip', action='store_true',
         help='list ip of running virtual machines')
+box_ls.add_argument('-v', dest='volumes', action='store_true',
+        help='list active volumes')
 box_rm = subparsers.add_parser('rm', parents=[suparent],
         description='Remove virtual machine',
         help='Remove virtual machine')
@@ -608,12 +635,18 @@ if __name__ == '__main__':
         else:
             parser.parse_args([args.command, '--help'])
     libvirt.virEventRegisterDefaultImpl()
-    conn = libvirt.open(args.uri)
+    try:
+        conn = libvirt.open(args.uri)
+    except libvirt.libvirtError:
+        sys.exit(1)
 
 # Ls command section
     if args.sub == 'ls':
+        if args.ip + args.storage + args.volumes >= 2:
+            print 'Please specify only one option at a time'
+            sys.exit(1)
         if not args.ip:
-            lsvirt(args.storage)
+            lsvirt(args.storage, args.volumes)
             sys.exit(0)
         if args.uri == 'qemu:///system':
             vsorted = [conn.lookupByID(i).name() for i in conn.listDomainsID()]
