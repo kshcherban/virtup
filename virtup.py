@@ -192,7 +192,7 @@ class Net:
             if mac in i:
                 return i.split()[0]
         f.close()
-        return 0
+        return None
 
     def ifname(self, machname):
         """Extract network interface name from domain XML decription"""
