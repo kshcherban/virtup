@@ -527,7 +527,7 @@ def stream_callback(stream, events, unused):
 
 # Here we parse all the commands
 parser = argparse.ArgumentParser(prog='virtup.py')
-parser.add_argument('-u', '--uri', type=str, default='qemu:///system',
+parser.add_argument('-c', '--connect', dest='uri', type=str, default='qemu:///system',
         help='hypervisor connection URI, default is qemu:///system')
 parser.add_argument('-v', '--version', action='version', version='%(prog)s 0.1')
 subparsers = parser.add_subparsers(dest='sub')
@@ -589,7 +589,7 @@ box_suspend = subparsers.add_parser('suspend', parents=[suparent],
 box_suspend.add_argument('-f', metavar='FILE',
         help='file where machine state will be saved, default is ./<name>.sav')
 box_resume = subparsers.add_parser('resume', parents=[suparent],
-        help='Resume l machine',
+        help='Resume virtual machine',
         description='Resume virtual machine from file')
 box_resume.add_argument('-f', metavar='FILE',
         help='file from which machine state will be resumed, default is ./<name>.sav')
