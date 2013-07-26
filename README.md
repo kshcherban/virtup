@@ -8,7 +8,7 @@ It can easily import virtual machine from image into hypervisor, start it
 and provide you with it's ip address to connect via SSH or other preferred method.
 
 ## Requirements
-Python >= 2.7 <= 3
+Python 2.6
 
 libvirt Python API bindings
 
@@ -49,17 +49,18 @@ ubuntu64 created, you can start it now
 ```
 ./virtup.py up ubuntu64
 ubuntu64 started
-Waiting for ip...
-192.168.122.250
 ```
 
-6\. Ssh into newly created machine. Template used in example has passswordless ssh root login.
+6\. Open console of virtual machine.  
+Also template used in example has passswordless ssh root login.
 
-    ssh root@192.168.122.250
+    ./virtup.py console ubuntu64
 
 ## Templates creation
 Create virtual machine with ```create``` command or with virsh.  
 Install operating system on it, booting it from iso, pxe or your preferred method.  
 Start it, install necessary soft. Configure ssh.  
-Remove **/etc/udev/rules.d/70-persistent-net.rules** file. This is required for network interface name to be eth0 on first boot of newly created machine.  
+Remove **/etc/udev/rules.d/70-persistent-net.rules** file.  
+This is required for network interface name to be eth0 on first boot of newly created machine.  
+To enable console access please follow [this](http://www.vanemery.com/Linux/Serial/serial-console.html) manual.  
 Shut it down and use it's disk image as template.

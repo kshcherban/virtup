@@ -554,7 +554,7 @@ def stream_callback(stream, events, unused):
 parser = argparse.ArgumentParser(prog='virtup.py')
 parser.add_argument('-c', '--connect', dest='uri', type=str, default='qemu:///system',
         help='hypervisor connection URI, default is qemu:///system')
-parser.add_argument('-v', '--version', action='version', version='%(prog)s 0.1')
+parser.add_argument('-v', '--version', action='version', version='%(prog)s 0.7')
 subparsers = parser.add_subparsers(dest='sub')
 # Parent argparser to contain repeated arguments
 suparent = argparse.ArgumentParser(add_help=False)
