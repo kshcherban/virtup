@@ -25,19 +25,19 @@ You can have running guest in six steps.
 **CentOS/Fedora**  
 ```sudo yum install qemu-kvm libvirt libvirt-python```
 
-2\. Download one of prebuild boxes from [here](http://yadi.sk/d/KJROKkGb6Xv7u)
+2\. Download one of prebuild boxes. You can download them from [here](http://yadi.sk/d/KJROKkGb6Xv7u)
 
-```wget https://dl.dropboxusercontent.com/s/0l9wvtnzsl69hx0/ubuntu-12.04-amd64.img.tar.gz```
+```wget -O ubuntu.tgz http://goo.gl/3H5yy8```
 
 3\. Unpack it
 
-```tar -xzf ubuntu-12.04-amd64.img.tar.gz```
+```tar -xzf ubuntu.tgz```
 
 4\. Import it with preferred name, optionally memory, cpu, net and storage pool can be
 specified
 
 ```
-./virtup.py add -i ubuntu64.img ubuntu64
+./virtup.py add -i ubuntu-12.04-amd64.img ubuntu64
 Uploading template into volume ubuntu64
 done 100.00%
 Temporary template written in /tmp/ubuntu64.xml
