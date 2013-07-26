@@ -566,10 +566,12 @@ box_export.add_argument('-xml', dest='xml', action='store_true',
         help='virtual machine XML description will be printed')
 box_export.add_argument('-i', dest='image', type=str,
         help='image file name to export disk image')
-box_ls = subparsers.add_parser('ls', help='List virtual machines/storage pools',
-        description='List existing virtual machines and their state or active storage pools')
+box_ls = subparsers.add_parser('ls', help='List virtual machines',
+        description='List existing virtual machines, active storage pools, ip addresses')
 box_ls.add_argument('-s', dest='storage', action='store_true',
-        help='if specified active storage pools will be listed')
+        help='list active storage pools')
+box_ls.add_argument('-ip', dest='ip', action='store_true',
+        help='list ip of running virtual machines')
 box_rm = subparsers.add_parser('rm', parents=[suparent],
         description='Remove virtual machine',
         help='Remove virtual machine')
@@ -610,7 +612,17 @@ if __name__ == '__main__':
 
 # Ls command section
     if args.sub == 'ls':
-        lsvirt(args.storage)
+        if not args.ip:
+            lsvirt(args.storage)
+            sys.exit(0)
+        if args.uri == 'qemu:///system':
+            vsorted = [conn.lookupByID(i).name() for i in conn.listDomainsID()]
+            print '{0:<30}{1:<15}'.format('Name', 'IP')
+            for i in sorted(vsorted):
+                ip = Net(conn).ip(i)
+                print '{0:<30}{1:<15}'.format(i, ip)
+        else:
+            print 'Not available for remote connections'
 
 # Add and Create section
     if args.sub == 'add':
@@ -680,12 +692,6 @@ if __name__ == '__main__':
             s = dom.create()
             if s == 0:
                 print args.name, 'started'
-            if args.uri == 'qemu:///system':
-                print 'Waiting for ip...'
-                time.sleep(20)
-                ip = Net(conn).ip(args.name)
-                if ip:
-                    print ip
         except libvirt.libvirtError:
             sys.exit(1)
 
