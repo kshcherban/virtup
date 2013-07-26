@@ -656,7 +656,7 @@ if __name__ == '__main__':
                 dtype, args.net)
         try:
             conn.defineXML(template)
-            print args.name, 'created, you can start it now'
+            print args.name, 'created'
         except libvirt.libvirtError:
             sys.exit(1)
         if upload:
