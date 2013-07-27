@@ -330,7 +330,10 @@ def get_stor(machname, pool=True):
     except libvirt.libvirtError:
         sys.exit(1)
     xe = ET.fromstring(dom.XMLDesc(0))
-    path = xe.find('.//devices/disk/source').get('file')
+    try:
+        path = xe.find('.//devices/disk/source').get('file')
+    except AttributeError:
+        return None
     if not path:
         path = xe.find('.//devices/disk/source').get('dev')
     if pool:
