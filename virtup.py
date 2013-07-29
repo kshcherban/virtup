@@ -277,7 +277,7 @@ class Net:
         ipaddr = self.arp2ip(self.mac(machname))
         if ipaddr:
             return ipaddr
-        pool = Pool(processes=50)
+        pool = Pool(processes=128)
         cidr = self.get_subnet(self.ifname(machname))
         iprange = self.block2range(self.cidr2block(cidr)[0], self.cidr2block(cidr)[1])
         pool.map(ping, iprange, 1)
@@ -289,7 +289,7 @@ class Net:
 def ping(ip):
     """Ping ip"""
     if ip.split('.')[-1] != '0' and ip.split('.')[-1] != '255':
-        os.popen("ping -q -c1 " + ip + ' 2>/dev/null')
+        os.popen("ping -W1 -q -c1 " + ip + ' 2>/dev/null')
         return 0
 
 # Generate random MAC address
