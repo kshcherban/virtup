@@ -340,9 +340,7 @@ def get_stor(machname, pool=True):
         path = '/'.join(path.split('/')[:-1])
         data = conn.listStoragePools()
     else:
-        data = {}
-        for i in conn.listStoragePools():
-            data[i] = conn.storagePoolLookupByName(i).listVolumes()
+        data = {i:conn.storagePoolLookupByName(i).listVolumes() for i in conn.listStoragePools()} 
     if isinstance(data, list):
         for p in data:
             o = conn.storagePoolLookupByName(p)
@@ -481,9 +479,7 @@ def lsvirt(storage, volumes):
     if volumes:
         # Find list of machines and create dict with list of vols associated to them
         ml = [conn.lookupByID(i).name() for i in conn.listDomainsID()] + conn.listDefinedDomains()
-        md = {}
-        for i in ml:
-            md[get_stor(i, 0)] = i
+        md = {get_stor(i, 0):i for i in ml}
         print '{0:<15}{1:<30}{2:<10}{3:<10}{4:<10}'.format('Pool', 'Volume', 'Size', 
                 'Use', 'Used by')
         for p in pools:
@@ -491,7 +487,7 @@ def lsvirt(storage, volumes):
             print p
             print '{0:>15}'.format('\\')
             vols = conn.storagePoolLookupByName(p).listVolumes()
-            for v in vols:
+            for v in sorted(vols):
                 if v not in md:
                     md[v] = None
                 vinf = conn.storagePoolLookupByName(p).storageVolLookupByName(v).info()
