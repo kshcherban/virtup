@@ -8,7 +8,7 @@ It can easily import virtual machine from image into hypervisor, start it
 and provide you with it's ip address to connect via SSH or other preferred method.
 
 ## Requirements
-Python 2.6
+Python 2.7
 
 libvirt Python API bindings
 
