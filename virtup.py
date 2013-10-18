@@ -105,8 +105,8 @@ class Disk:
         f = open(src, 'w')
         # Start transfer
         total = 0
-        print ('Downloading volume {0} into {1}'.format(vol.name(), 
-                os.path.abspath(src)))
+        print 'Downloading volume {0} into {1}'.format(vol.name(), 
+                os.path.abspath(src))
         try:
             while True:
                 ret = stream.recv(256000)
@@ -148,8 +148,8 @@ class Disk:
             fileobj = open(src, "r")
             # Start transfer
             total = 0
-            print ('Uploading volume {0} from {1}'.format(vol.name(),
-                    os.path.abspath(src)))
+            print 'Uploading volume {0} from {1}'.format(vol.name(),
+                    os.path.abspath(src))
             while True:
                 blocksize = 256000
                 data = fileobj.read(blocksize)
@@ -324,12 +324,14 @@ def is_lvm(pool):
     return 0
 
 # Get pool or volume name for given guest
-def get_stor(machname, pool=True):
+def get_stor(machname, pool=True, lxc=False):
     try:
         dom = conn.lookupByName(machname)
     except libvirt.libvirtError:
         sys.exit(1)
     xe = ET.fromstring(dom.XMLDesc(0))
+    if lxc:
+        return xe.find('.//devices/filesystem/source').get('dir')[1:]
     try:
         path = xe.find('.//devices/disk/source').get('file')
     except AttributeError:
@@ -340,7 +342,9 @@ def get_stor(machname, pool=True):
         path = '/'.join(path.split('/')[:-1])
         data = conn.listStoragePools()
     else:
-        data = {i:conn.storagePoolLookupByName(i).listVolumes() for i in conn.listStoragePools()} 
+        data = {}
+        for i in conn.listStoragePools():
+            data[i] = conn.storagePoolLookupByName(i).listVolumes()
     if isinstance(data, list):
         for p in data:
             o = conn.storagePoolLookupByName(p)
@@ -429,7 +433,7 @@ def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype, net):
     f = open(tmpf, 'w')
     f.write(tmpl)
     f.close()
-    print ('Temporary template written in {0}'.format(tmpf))
+    print 'Temporary template written in', tmpf
     return tmpl
 
 # Return modified xml from imported file ready for defining guest 
@@ -460,52 +464,54 @@ def argcheck(arg):
     elif arg[-1].lower() == 'g':
         return int(arg[:-1]) * (1024 ** 2)
     else:
-        print ('Error! Format can be <int>M or <int>G')
+        print 'Error! Format can be <int>M or <int>G'
         sys.exit(1)
 
 def lsvirt(storage, volumes):
     pools = sorted(conn.listStoragePools())
     # List storage pools
     if storage:
-        print ('{0:<30}{1:<10}{2:<10}{3:<10}{4:<10}'.format('Pool name', 'Size',
-            'Used', 'Avail', 'Use'))
+        print '{0:<30}{1:<10}{2:<10}{3:<10}{4:<10}'.format('Pool name', 'Size',
+            'Used', 'Avail', 'Use')
         for i in pools:
             p = conn.storagePoolLookupByName(i).info()
             use = '{0:.2%}'.format(float(p[2]) / float(p[1]))
-            print ('{0:<30}{1:<10}{2:<10}{3:<10}{4:<10}'.format(i, convert_bytes(p[1]),
-                convert_bytes(p[2]), convert_bytes(p[3]), use))
+            print '{0:<30}{1:<10}{2:<10}{3:<10}{4:<10}'.format(i, convert_bytes(p[1]),
+                convert_bytes(p[2]), convert_bytes(p[3]), use)
         sys.exit(0)
     # List volumes
     if volumes:
         # Find list of machines and create dict with list of vols associated to them
         ml = [conn.lookupByID(i).name() for i in conn.listDomainsID()] + conn.listDefinedDomains()
-        md = {get_stor(i, 0):i for i in ml}
-        print ('{0:<15}{1:<30}{2:<10}{3:<10}{4:<10}'.format('Pool', 'Volume', 'Size', 
-                'Use', 'Used by'))
+        md = {}
+	for i in ml:
+	    md[get_stor(i,0)] = i
+        print '{0:<15}{1:<30}{2:<10}{3:<10}{4:<10}'.format('Pool', 'Volume', 'Size', 
+                'Use', 'Used by')
         for p in pools:
             pinf = conn.storagePoolLookupByName(p).info()
-            print (p)
-            print ('{0:>15}'.format('\\'))
+            print p
+            print '{0:>15}'.format('\\')
             vols = conn.storagePoolLookupByName(p).listVolumes()
             for v in sorted(vols):
                 if v not in md:
                     md[v] = None
                 vinf = conn.storagePoolLookupByName(p).storageVolLookupByName(v).info()
                 use = '{0:.2%}'.format(float(vinf[2]) / float(pinf[1])) 
-                print ('{0:<15}{1:<30}{2:<10}{3:<10}{4:<10}'.format(' ', v, 
-                        convert_bytes(vinf[2]), use, md[v]))
+                print '{0:<15}{1:<30}{2:<10}{3:<10}{4:<10}'.format(' ', v, 
+                        convert_bytes(vinf[2]), use, md[v])
         sys.exit(0)
     # List machines
     vsorted = [conn.lookupByID(i).name() for i in conn.listDomainsID()]
-    print ('{0:<30}{1:<15}{2:<15}{3:>10}'.format('Name', 'CPUs', 'Memory', 'State'))
+    print '{0:<30}{1:<15}{2:<15}{3:>10}'.format('Name', 'CPUs', 'Memory', 'State')
     for i in sorted(vsorted):
         j = conn.lookupByName(i).info()
-        print ('{0:<30}{1:<15}{2:<15}{3:>10}'.format(i, j[3], 
-            convert_bytes(j[2] * 1024), 'up'))
+        print '{0:<30}{1:<15}{2:<15}{3:>10}'.format(i, j[3], 
+            convert_bytes(j[2] * 1024), 'up')
     for i in sorted(conn.listDefinedDomains()):
         j = conn.lookupByName(i).info()
-        print ('{0:<30}{1:<15}{2:<15}{3:>10}'.format(i, j[3],
-            convert_bytes(j[2] * 1024), 'down'))
+        print '{0:<30}{1:<15}{2:<15}{3:>10}'.format(i, j[3], 
+            convert_bytes(j[2] * 1024), 'down')
     sys.exit(0)
 
 # Converting bytes to human-readable
@@ -548,11 +554,82 @@ def stream_callback(stream, events, unused):
             return
         os.write(0, receivedData)
 
+# LXC sections
+def prepare_tmpl_lxc(machname, mac, cpu, mem, img, net):
+    if net == 'default':
+        ntype = 'network'
+    else:
+        ntype = 'bridge'
+    dtype = 'mount'
+    tmpl = '''
+<domain type='lxc'>
+  <name>{0}</name>
+  <memory>{1}</memory>
+  <vcpu placement='static'>{2}</vcpu>
+  <os>
+    <type>exe</type>
+    <init>/sbin/init</init>
+  </os>
+  <features>
+    <acpi/>
+    <apic/>
+    <pae/>
+  </features>
+  <clock offset='utc'/>
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>restart</on_crash>
+  <devices>
+    <interface type='{3}'>
+      <mac address='{5}'/>
+      <source {3}='{6}'/>
+    </interface>
+    <filesystem type='{4}' accessmode='passthrough'>
+        <source dir='{7}'/>
+        <target dir='/'/>
+    </filesystem>
+    <console type='pty'>
+      <target type='lxc' port='0'/>
+      <alias name='console0'/>
+    </console>
+  </devices>
+</domain>
+'''.format(machname, mem, cpu, ntype, dtype, mac, net, img)
+    tmpf = '/tmp/' + machname + '.xml'
+    f = open(tmpf, 'w')
+    f.write(tmpl)
+    f.close()
+    print 'Temporary template written in', tmpf
+    return tmpl
+
+def uri_lxc(uri):
+    if re.findall('lxc', uri[:7]):
+        return True
+    return False
+
+# Operations with ZFS
+def is_snapshot(image):
+    try:
+        os.popen('zfs list -t snapshot %s' % (image)).read()[0]
+    except IndexError:
+        return False
+    return True
+
+def clone_snapshot(image, machname):
+    zpool = image.split('/')[0]
+    try:
+        os.popen('zfs clone {0} {1}/{2}'.format(image, zpool, machname))
+    except:
+        print 'Error cloning snaphot {0} into {2}/{1}'.format(image, machname, zpool)
+        sys.exit(1)
+    return '/{0}/{1}'.format(zpool, machname)
+
+# End LXC
 
 # Here we parse all the commands
 parser = argparse.ArgumentParser(prog='virtup.py')
-parser.add_argument('-c', '--connect', dest='uri', type=str, default='qemu:///system',
-        help='hypervisor connection URI, default is qemu:///system')
+parser.add_argument('-c', '--connect', dest='uri', type=str, default='lxc:///',
+        help='hypervisor connection URI, default is lxc:///')
 parser.add_argument('-v', '--version', action='version', version='%(prog)s 0.7')
 subparsers = parser.add_subparsers(dest='sub')
 # Parent argparser to contain repeated arguments
@@ -563,6 +640,8 @@ parent.add_argument('-c', dest='cpus', type=int, default=1,
         help='amount of CPU cores, default is 1')
 parent.add_argument('-net', dest='net', metavar='IFACE', type=str, default='default',
         help='bridge network interface name, default is NAT network "default"')
+parent.add_argument('-mac', dest='mac', metavar='MAC', type=str,
+        help='MAC address')
 parent.add_argument('-m', dest='mem', metavar='RAM', type=str, default='512M',
         help='amount of memory, can be M or G, default is 512M')
 parent.add_argument('-p', dest='pool', metavar='POOL', type=str,
@@ -642,34 +721,45 @@ if __name__ == '__main__':
 # Ls command section
     if args.sub == 'ls':
         if args.ip + args.storage + args.volumes >= 2:
-            print ('Please specify only one option at a time')
+            print 'Please specify only one option at a time'
             sys.exit(1)
         if not args.ip:
             lsvirt(args.storage, args.volumes)
             sys.exit(0)
-        if args.uri == 'qemu:///system':
+        if args.uri == 'qemu:///system' or args.uri == 'lxc:///':
             vsorted = [conn.lookupByID(i).name() for i in conn.listDomainsID()]
-            print ('{0:<30}{1:<15}'.format('Name', 'IP'))
+            print '{0:<30}{1:<15}'.format('Name', 'IP')
             for i in sorted(vsorted):
                 ip = Net(conn).ip(i)
-                print ('{0:<30}{1:<15}'.format(i, ip))
+                print '{0:<30}{1:<15}'.format(i, ip)
         else:
-            print ('Not available for remote connections')
+            print 'Not available for remote connections'
 
 # Add and Create section
     if args.sub == 'add':
         if not args.xml and not args.image:
-            print ('Either -xml or -i should be specified')
+            print 'Either -xml or -i should be specified'
             sys.exit(1)
         mem = argcheck(args.mem)
-        mac = randomMAC()
+        if not args.mac:
+            mac = randomMAC()
+        else:
+            mac = args.mac
         if args.xml:
             xml = args.xml.read()
         if not args.image:
             upload = False
+        # For LXC we do not upload image as it's a folder
+        elif args.image and uri_lxc(args.uri):
+            #image = os.path.abspath(args.image)
+            if is_snapshot(args.image):
+                image = clone_snapshot(args.image, args.name)
+            else:
+                image = args.image
+            upload = False
         else:
             if not os.path.isfile(args.image):
-                print ('{0} not found'.format(args.image))
+                print args.image, 'not found'
                 sys.exit(1)
             format = find_image_format(args.image)
             imgsize = os.path.getsize(args.image)
@@ -684,23 +774,38 @@ if __name__ == '__main__':
         if args.xml and not args.image:
             template = xml2tmpl(xml, args.name)
         elif not args.xml:
-            template = prepare_tmpl(args.name, mac, args.cpus, mem, image, format,
+            # Condition for LXC
+            if uri_lxc(args.uri):
+                template = prepare_tmpl_lxc(args.name, mac, args.cpus, mem, image, 
+                            args.net)
+                # Replace hostname
+                hostfile = image + '/etc/sysconfig/network'
+                with open(hostfile, 'r') as fp:
+                    oldfile = fp.read()
+                newfile  = re.sub(r'HOSTNAME=.+',r'HOSTNAME=%s' % (args.name), oldfile)
+                with open(hostfile, 'w') as fp:
+                    fp.write(newfile)
+            else:
+                template = prepare_tmpl(args.name, mac, args.cpus, mem, image, format,
                 dtype, args.net)
         try:
             conn.defineXML(template)
-            print ('{0} added'.format(args.name))
+            print args.name, 'created'
         except libvirt.libvirtError:
             sys.exit(1)
         if upload:
             ret = Disk(conn, args.pool).upload_vol(args.name, args.image)
             if not ret:
-                print ('Upload failed. Exiting')
+                print 'Upload failed. Exiting'
                 sys.exit(1)
 
 # Create section
     if args.sub == 'create':
         mem = argcheck(args.mem)
-        mac = randomMAC()
+        if not args.mac:
+            mac = randomMAC()
+        else:
+            mac = args.mac
         format = 'raw'
         imgsize = argcheck(args.size) * 1024
         args.image = args.name
@@ -713,7 +818,7 @@ if __name__ == '__main__':
             dtype, args.net)
         try:
             conn.defineXML(template)
-            print ('{0} created'.format(args.name))
+            print args.name, 'created'
         except libvirt.libvirtError:
             sys.exit(1)
 
@@ -723,7 +828,7 @@ if __name__ == '__main__':
             dom = conn.lookupByName(args.name)
             s = dom.create()
             if s == 0:
-                print ('{0} started'.format(args.name))
+                print args.name, 'started'
         except libvirt.libvirtError:
             sys.exit(1)
 
@@ -733,7 +838,7 @@ if __name__ == '__main__':
             dom = conn.lookupByName(args.name)
             s = dom.destroy()
             if s == 0:
-                print ('{0} powered off'.format(args.name))
+                print args.name, 'powered off'
         except libvirt.libvirtError:
             sys.exit(1)
 
@@ -741,14 +846,19 @@ if __name__ == '__main__':
     if args.sub == 'rm':
         pool = get_stor(args.name)
         vol = get_stor(args.name, 0)
+        if uri_lxc(args.uri):
+            vol = get_stor(args.name, 0, 1)
         try:
             conn.lookupByName(args.name).undefine()
-            print ('{0} removed'.format(args.name))
+            print args.name, 'removed'
         except libvirt.libvirtError:
             sys.exit(1)
         if args.full:
-            Disk(conn, pool).delete_vol(vol)
-            print ('Volume {0} removed'.format(vol))
+            if uri_lxc(args.uri):
+                os.popen('zfs destroy %s' % (vol))
+            else:
+                Disk(conn, pool).delete_vol(vol)
+            print 'Volume {0} removed'.format(vol)
 
 # Suspend section
     if args.sub == 'suspend':
@@ -756,11 +866,11 @@ if __name__ == '__main__':
             dom = conn.lookupByName(args.name)
             if not args.f:
                 if args.uri != 'qemu:///system':
-                    print ('Option -f is required for remote connection')
+                    print 'Option -f is required for remote connection'
                     sys.exit(1)
                 args.f = args.name + '.sav'
             dom.save(args.f)
-            print ('{0} suspended into {1}'.format(args.name, args.f))
+            print args.name, 'suspended into', args.f
         except:
             sys.exit(1)
 
@@ -768,23 +878,23 @@ if __name__ == '__main__':
     if args.sub == 'resume':
         if not args.f:
             if args.uri != 'qemu:///system':
-                print ('Option -f is required for remote connection')
+                print 'Option -f is required for remote connection'
                 sys.exit(1)
             args.f = args.name + '.sav'
         try:
             conn.restore(args.f)
-            print ('{0} resumed from {1}'.format(args.name, args.f))
+            print args.name, 'resumed from', args.f
         except libvirt.libvirtError:
             sys.exit(1)
 
 # Export section
     if args.sub == 'export':
         if not args.xml and not args.image:
-            print ('Nothing to export')
+            print 'Nothing to export'
             sys.exit(1)
         if args.xml:
             try:
-                print (conn.lookupByName(args.name).XMLDesc(0))
+                print conn.lookupByName(args.name).XMLDesc(0)
             except libvirt.libvirtError:
                 sys.exit(1)
         if not args.image:
@@ -792,13 +902,13 @@ if __name__ == '__main__':
         try:
             f = open(args.image, 'w')
             f.close()
-        except IOError as e:
-            print (e)
+        except IOError, e:
+            print e
             sys.exit(1)
         pool = get_stor(args.name)
         vol = get_stor(args.name, 0)
         if not vol:
-            print ('Volume attached to {0} not found'.format(args.name))
+            print 'Volume attached to {0} not found'.format(args.name)
             sys.exit(1)
         if Disk(conn, pool).download_vol(vol, args.image):
             sys.exit(0)
@@ -819,7 +929,7 @@ if __name__ == '__main__':
             dom.openConsole(None, stream, 0)
         except libvirt.libvirtError:
             sys.exit(1)
-        print ('Escape character is ^] press Enter')
+        print 'Escape character is ^] press Enter'
         run_console = True
         stdin_watch = libvirt.virEventAddHandle(0, libvirt.VIR_EVENT_HANDLE_READABLE,
                 stdin_callback, None)
