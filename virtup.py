@@ -617,12 +617,13 @@ def is_snapshot(image):
 
 def clone_snapshot(image, machname):
     zpool = image.split('/')[0]
+    zpoolpath = os.popen('zfs list -H {0}'.format(zpool)).read().split()[-1]
     try:
         os.popen('zfs clone {0} {1}/{2}'.format(image, zpool, machname))
     except:
         print 'Error cloning snaphot {0} into {2}/{1}'.format(image, machname, zpool)
         sys.exit(1)
-    return '/{0}/{1}'.format(zpool, machname)
+    return '{0}/{1}'.format(zpoolpath, machname)
 
 # End LXC
 
@@ -751,7 +752,6 @@ if __name__ == '__main__':
             upload = False
         # For LXC we do not upload image as it's a folder
         elif args.image and uri_lxc(args.uri):
-            #image = os.path.abspath(args.image)
             if is_snapshot(args.image):
                 image = clone_snapshot(args.image, args.name)
             else:
