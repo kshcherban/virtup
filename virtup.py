@@ -855,7 +855,7 @@ if __name__ == '__main__':
             sys.exit(1)
         if args.full:
             if uri_lxc(args.uri):
-                os.popen('zfs destroy %s' % (vol))
+                os.popen('zfs destroy -f %s' % (vol))
             else:
                 Disk(conn, pool).delete_vol(vol)
             print 'Volume {0} removed'.format(vol)
