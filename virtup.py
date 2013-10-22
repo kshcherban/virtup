@@ -176,40 +176,6 @@ class Net:
     def __init__(self, conn):
         self.conn = conn
 
-    def mac(self, machname):
-        """Return virtual machine MAC address"""
-        xe = ET.fromstring(self.conn.lookupByName(machname).XMLDesc(0))
-        for iface in xe.findall('.//devices/interface'):
-            mac = iface.find('mac').get('address')
-        return mac
-
-    @staticmethod
-    def arp2ip(mac):
-        """Read arp cache and extracts ip address that corresponds virtual machine
-        MAC"""
-        f = open('/proc/net/arp', 'r')
-        for i in f.readlines():
-            if mac in i:
-                return i.split()[0]
-        f.close()
-        return None
-
-    def ifname(self, machname):
-        """Extract network interface name from domain XML decription"""
-        dom = self.conn.lookupByName(machname).XMLDesc(0)
-        net = ET.fromstring(dom).find('.//interface/source').get('network')
-        if not net:
-            return ET.fromstring(dom).find('.//interface/source').get('bridge')
-        ifname = ET.fromstring(self.conn.networkLookupByName(net).XMLDesc(0)
-            ).find('.//bridge').get('name')
-        return ifname
-    
-    @staticmethod
-    def get_subnet(ifname):
-        """Return CIDR got from /bin/ip output"""
-        patt = re.compile(r'inet\s*(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/\d{1,3})')
-        return patt.findall(os.popen('ip a s ' + ifname).read())[0]
-
     @staticmethod 
     def long2ip(l):
         """Convert a network byte order 32-bit integer to a dotted quad ip
@@ -271,6 +237,47 @@ class Net:
                     for n in oct4:
                         iprange.append(str(i)+'.'+str(j)+'.'+str(m)+'.'+str(n))
         return iprange
+
+    @staticmethod
+    def is_mac_addr(mac):
+        mac = mac.rstrip().lower()
+        if re.match("[0-9a-f]{2}(:)[0-9a-f]{2}(\\1[0-9a-f]{2}){4}$", mac):
+            return True
+        return False
+
+    def mac(self, machname):
+        """Return virtual machine MAC address"""
+        xe = ET.fromstring(self.conn.lookupByName(machname).XMLDesc(0))
+        for iface in xe.findall('.//devices/interface'):
+            mac = iface.find('mac').get('address')
+        return mac
+
+    def ifname(self, machname):
+        """Extract network interface name from domain XML decription"""
+        dom = self.conn.lookupByName(machname).XMLDesc(0)
+        net = ET.fromstring(dom).find('.//interface/source').get('network')
+        if not net:
+            return ET.fromstring(dom).find('.//interface/source').get('bridge')
+        ifname = ET.fromstring(self.conn.networkLookupByName(net).XMLDesc(0)
+            ).find('.//bridge').get('name')
+        return ifname
+
+    @staticmethod
+    def arp2ip(mac):
+        """Read arp cache and extracts ip address that corresponds virtual machine
+        MAC"""
+        f = open('/proc/net/arp', 'r')
+        for i in f.readlines():
+            if mac in i:
+                return i.split()[0]
+        f.close()
+        return None
+
+    @staticmethod
+    def get_subnet(ifname):
+        """Return CIDR got from /bin/ip output"""
+        patt = re.compile(r'inet\s*(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/\d{1,3})')
+        return patt.findall(os.popen('ip a s ' + ifname).read())[0]
 
     def ip(self, machname):
         """Get virtual machine ip address"""
@@ -627,6 +634,16 @@ def clone_snapshot(image, machname):
 
 # End LXC
 
+# MAC address condition procedure
+def prepare_mac(mac=None):
+    if not mac:
+        return randomMAC()
+    elif Net(conn).is_mac_addr(mac):
+        return mac
+    else:
+        print 'Incorrect MAC address:', mac
+        sys.exit(1)
+
 # Here we parse all the commands
 parser = argparse.ArgumentParser(prog='virtup.py')
 parser.add_argument('-c', '--connect', dest='uri', type=str, default='lxc:///',
@@ -719,6 +736,7 @@ if __name__ == '__main__':
     except libvirt.libvirtError:
         sys.exit(1)
 
+
 # Ls command section
     if args.sub == 'ls':
         if args.ip + args.storage + args.volumes >= 2:
@@ -742,10 +760,7 @@ if __name__ == '__main__':
             print 'Either -xml or -i should be specified'
             sys.exit(1)
         mem = argcheck(args.mem)
-        if not args.mac:
-            mac = randomMAC()
-        else:
-            mac = args.mac
+        mac = prepare_mac(args.mac)
         if args.xml:
             xml = args.xml.read()
         if not args.image:
@@ -802,10 +817,7 @@ if __name__ == '__main__':
 # Create section
     if args.sub == 'create':
         mem = argcheck(args.mem)
-        if not args.mac:
-            mac = randomMAC()
-        else:
-            mac = args.mac
+        mac = prepare_mac(args.mac)
         format = 'raw'
         imgsize = argcheck(args.size) * 1024
         args.image = args.name
