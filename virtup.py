@@ -365,83 +365,81 @@ def get_stor(machname, pool=True, lxc=False):
                     return v
     return None
 
-# Prepare template to import with virsh
-def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype, net):
+# Generate XML template for domain definition
+def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype, net, type):
     if net == 'default':
         ntype = 'network'
     else:
         ntype = 'bridge'
-    if dtype == 'file':
-        src = 'file'
+    if type == 'kvm':
+        if dtype == 'file':
+            dsrc = 'file'
+        else:
+            dsrc = 'dev'
     else:
-        src = 'dev'
-    tmpl = '''
-<domain type='kvm'>
-  <name>{0}</name>
-  <memory>{1}</memory>
-  <vcpu placement='static'>{2}</vcpu>
-  <os>
-    <type arch='x86_64' machine='pc'>hvm</type>
-    <boot dev='hd'/>
-  </os>
-  <features>
-    <acpi/>
-    <apic/>
-    <pae/>
-  </features>
-  <clock offset='utc'/>
-  <on_poweroff>destroy</on_poweroff>
-  <on_reboot>restart</on_reboot>
-  <on_crash>restart</on_crash>
-  <devices>
-    <disk type='{6}' device='disk'>
-      <driver name='qemu' type='{3}' cache='none' io='native'/>
-      <source {7}='{4}'/>
-      <target dev='vda' bus='virtio'/>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x05' function='0x0'/>
-    </disk>
-    <disk type='block' device='cdrom'>
-      <driver name='qemu' type='raw'/>
-      <target dev='hdc' bus='ide'/>
-      <readonly/>
-      <address type='drive' controller='0' bus='1' target='0' unit='0'/>
-    </disk>
-    <controller type='ide' index='0'>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x1'/>
-    </controller>
-    <interface type='{8}'>
-      <mac address='{5}'/>
-      <source {8}='{9}'/>
-      <model type='virtio'/>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
-    </interface>
-    <serial type='pty'>
-      <target port='0'/>
-    </serial>
-    <console type='pty'>
-      <target type='serial' port='0'/>
-    </console>
-    <input type='tablet' bus='usb'/>
-    <input type='mouse' bus='ps2'/>
-    <graphics type='vnc' port='-1' autoport='yes'/>
-    <sound model='ich6'>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
-    </sound>
-    <video>
-      <model type='cirrus' vram='9216' heads='1'/>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
-    </video>
-    <memballoon model='virtio'>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x06' function='0x0'/>
-    </memballoon>
-  </devices>
-</domain> '''.format(machname, mem, cpu, format, img, mac, dtype, src, ntype, net)
+        dtype = 'mount'
+    xml_root = ET.Element('domain')
+    xml_root.set('type', type)
+    xml_name = ET.SubElement(xml_root, 'name')
+    xml_name.text = machname
+    xml_memory = ET.SubElement(xml_root, 'memory')
+    xml_memory.text = str(mem)
+    xml_cpu = ET.SubElement(xml_root, 'vcpu')
+    xml_cpu.set('placement', 'static')
+    xml_cpu.text = str(cpu)
+    xml_os = ET.SubElement(xml_root, 'os')
+    xml_type = ET.SubElement(xml_os, 'type')
+    xml_devices = ET.SubElement(xml_root, 'devices')
+    xml_interface = ET.SubElement(xml_devices, 'interface')
+    xml_interface.set('type', ntype)
+    xml_mac = ET.SubElement(xml_interface, 'mac')
+    xml_mac.set('address', mac)
+    xml_source = ET.SubElement(xml_interface, 'source')
+    xml_source.set(ntype, net)
+    xml_console = ET.SubElement(xml_devices, 'console')
+    xml_console.set('type', 'pty')
+    xml_cs_target = ET.SubElement(xml_console, 'target')
+    xml_cs_target.set('port', '0')
+    xml_cs_alias = ET.SubElement(xml_console, 'alias')
+    xml_cs_alias.set('name', 'console0')
+    if type == 'kvm':
+        xml_type.set('arch', 'x86_64')
+        xml_type.set('machine', 'pc')
+        xml_type.text = 'hvm'
+        xml_boot = ET.SubElement(xml_os, 'boot')
+        xml_boot.set('dev', 'hd')
+        xml_model = ET.SubElement(xml_interface, 'model')
+        xml_model.set('type', 'virtio')
+        xml_disk = ET.SubElement(xml_devices, 'disk')
+        xml_disk.set('type', dtype)
+        xml_disk.set('device', 'disk')
+        xml_disk_driver = ET.SubElement(xml_disk, 'driver')
+        xml_disk_driver.set('name', 'qemu')
+        xml_disk_driver.set('type', format)
+        xml_disk_driver.set('cache', 'none')
+        xml_disk_driver.set('io', 'native')
+        xml_disk_source = ET.SubElement(xml_disk, 'source')
+        xml_disk_source.set(dsrc, img)
+        xml_disk_target = ET.SubElement(xml_disk, 'target')
+        xml_disk_target.set('dev', 'vda')
+        xml_disk_target.set('bus', 'virtio')
+        xml_cs_target.set('type', 'serial')
+    else:
+        xml_type.text = 'exe'
+        xml_init = ET.SubElement(xml_os, 'init')
+        xml_init.text = '/sbin/init'
+        xml_filesystem = ET.SubElement(xml_devices, 'filesystem')
+        xml_filesystem.set('type', 'mount')
+        xml_filesystem.set('accessmode', 'passthrough')
+        xml_fs_source = ET.SubElement(xml_filesystem, 'source')
+        xml_fs_source.set('dir', img)
+        xml_fs_target = ET.SubElement(xml_filesystem, 'target')
+        xml_fs_target.set('dir', '/')
+        xml_cs_target.set('type', 'lxc')
     tmpf = '/tmp/' + machname + '.xml'
-    f = open(tmpf, 'w')
-    f.write(tmpl)
-    f.close()
+    ET.ElementTree(xml_root).write(tmpf)
     print 'Temporary template written in', tmpf
-    return tmpl
+    return ET.tostring(xml_root)
 
 # Return modified xml from imported file ready for defining guest 
 def xml2tmpl(xmlf, machname, image=None, format=None, dtype=None):
@@ -562,53 +560,6 @@ def stream_callback(stream, events, unused):
         os.write(0, receivedData)
 
 # LXC sections
-def prepare_tmpl_lxc(machname, mac, cpu, mem, img, net):
-    if net == 'default':
-        ntype = 'network'
-    else:
-        ntype = 'bridge'
-    dtype = 'mount'
-    tmpl = '''
-<domain type='lxc'>
-  <name>{0}</name>
-  <memory>{1}</memory>
-  <vcpu placement='static'>{2}</vcpu>
-  <os>
-    <type>exe</type>
-    <init>/sbin/init</init>
-  </os>
-  <features>
-    <acpi/>
-    <apic/>
-    <pae/>
-  </features>
-  <clock offset='utc'/>
-  <on_poweroff>destroy</on_poweroff>
-  <on_reboot>restart</on_reboot>
-  <on_crash>restart</on_crash>
-  <devices>
-    <interface type='{3}'>
-      <mac address='{5}'/>
-      <source {3}='{6}'/>
-    </interface>
-    <filesystem type='{4}' accessmode='passthrough'>
-        <source dir='{7}'/>
-        <target dir='/'/>
-    </filesystem>
-    <console type='pty'>
-      <target type='lxc' port='0'/>
-      <alias name='console0'/>
-    </console>
-  </devices>
-</domain>
-'''.format(machname, mem, cpu, ntype, dtype, mac, net, img)
-    tmpf = '/tmp/' + machname + '.xml'
-    f = open(tmpf, 'w')
-    f.write(tmpl)
-    f.close()
-    print 'Temporary template written in', tmpf
-    return tmpl
-
 def uri_lxc(uri):
     if re.findall('lxc', uri[:7]):
         return True
@@ -761,38 +712,21 @@ if __name__ == '__main__':
             sys.exit(1)
         mem = argcheck(args.mem)
         mac = prepare_mac(args.mac)
-        if args.xml:
-            xml = args.xml.read()
-        if not args.image:
-            upload = False
-        # For LXC we do not upload image as it's a folder
-        elif args.image and uri_lxc(args.uri):
-            if is_snapshot(args.image):
-                image = clone_snapshot(args.image, args.name)
-            else:
-                image = args.image
-            upload = False
-        else:
-            if not os.path.isfile(args.image):
-                print args.image, 'not found'
-                sys.exit(1)
-            format = find_image_format(args.image)
-            imgsize = os.path.getsize(args.image)
-            upload = True
-            image = Disk(conn, args.pool).create_vol(args.name, imgsize, format)
-            if is_lvm(args.pool):
-                dtype = 'block'
-            else:
-                dtype = 'file'
-            if args.xml:
-                template = xml2tmpl(xml, args.name, image, format, dtype)
         if args.xml and not args.image:
-            template = xml2tmpl(xml, args.name)
-        elif not args.xml:
-            # Condition for LXC
+            upload = False
+            template = xml2tmpl(args.xml.read(), args.name)
+        else:
+            # LXC
             if uri_lxc(args.uri):
-                template = prepare_tmpl_lxc(args.name, mac, args.cpus, mem, image, 
-                            args.net)
+                # Prepare image
+                upload = False
+                if is_snapshot(args.image):
+                    image = clone_snapshot(args.image, args.name)
+                else:
+                    image = args.image
+                # Generate xml definition
+                template = prepare_tmpl(args.name, mac, args.cpus, mem, image, \
+                        '', '', args.net, 'lxc')
                 # Replace hostname
                 hostfile = image + '/etc/sysconfig/network'
                 with open(hostfile, 'r') as fp:
@@ -800,9 +734,24 @@ if __name__ == '__main__':
                 newfile  = re.sub(r'HOSTNAME=.+',r'HOSTNAME=%s' % (args.name), oldfile)
                 with open(hostfile, 'w') as fp:
                     fp.write(newfile)
+            # QEMU
             else:
-                template = prepare_tmpl(args.name, mac, args.cpus, mem, image, format,
-                dtype, args.net)
+                if not os.path.isfile(args.image):
+                    print args.image, 'not found'
+                    sys.exit(1)
+                upload = True
+                format = find_image_format(args.image)
+                imgsize = os.path.getsize(args.image)
+                image = Disk(conn, args.pool).create_vol(args.name, imgsize, format)
+                if is_lvm(args.pool):
+                    dtype = 'block'
+                else:
+                    dtype = 'file'
+                if args.xml:
+                    template = xml2tmpl(args.xml.read(), args.name, image, format, dtype)
+                else:
+                    template = prepare_tmpl(args.name, mac, args.cpus, mem, image, \
+                            format, dtype, args.net, 'kvm')
         try:
             conn.defineXML(template)
             print args.name, 'created'
@@ -827,7 +776,7 @@ if __name__ == '__main__':
             dtype = 'file'
         image = Disk(conn, args.pool).create_vol(args.name, imgsize, format)
         template = prepare_tmpl(args.name, mac, args.cpus, mem, image, format,
-            dtype, args.net)
+            dtype, args.net, 'kvm')
         try:
             conn.defineXML(template)
             print args.name, 'created'
