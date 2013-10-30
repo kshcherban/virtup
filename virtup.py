@@ -187,7 +187,7 @@ class Net:
             raise TypeError(
             "expected int between %d and %d inclusive" % (MIN_IP, MAX_IP))
         return '%d.%d.%d.%d' % (l >> 24 & 255, l >> 16 & 255, l >> 8 & 255, l & 255)
-    
+ 
     @staticmethod
     def ip2long(ip):
         """Convert a dotted-quad ip address to a network byte order 32-bit
@@ -582,7 +582,6 @@ def clone_snapshot(image, machname):
         print 'Error cloning snaphot {0} into {2}/{1}'.format(image, machname, zpool)
         sys.exit(1)
     return '{0}/{1}'.format(zpoolpath, machname)
-
 # End LXC
 
 # MAC address condition procedure
@@ -686,7 +685,6 @@ if __name__ == '__main__':
         conn = libvirt.open(args.uri)
     except libvirt.libvirtError:
         sys.exit(1)
-
 
 # Ls command section
     if args.sub == 'ls':
