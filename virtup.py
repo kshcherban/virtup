@@ -24,7 +24,8 @@ import termios
 import atexit
 import libvirt
 import argparse
-from multiprocessing import Pool
+import xml.dom.minidom # for pretty printing
+from multiprocessing import Pool # for fast ping to determine ip addresses of vm
 from xml.etree import ElementTree as ET
 
 
@@ -414,10 +415,9 @@ def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype, net, type):
         xml_disk.set('type', dtype)
         xml_disk.set('device', 'disk')
         xml_disk_driver = ET.SubElement(xml_disk, 'driver')
-        xml_disk_driver.set('name', 'qemu')
-        xml_disk_driver.set('type', format)
-        xml_disk_driver.set('cache', 'none')
-        xml_disk_driver.set('io', 'native')
+        for key, value in {'name': 'qemu', 'type': format, 'cache': 'none', 
+                            'io': 'native'}.iteritems():
+            xml_disk_driver.set(key, value)
         xml_disk_source = ET.SubElement(xml_disk, 'source')
         xml_disk_source.set(dsrc, img)
         xml_disk_target = ET.SubElement(xml_disk, 'target')
@@ -433,11 +433,9 @@ def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype, net, type):
         xml_video_model.set('vram', '9216')
         xml_video_model.set('heads', '1')
         xml_video_address = ET.SubElement(xml_video, 'address')
-        xml_video_address.set('type', 'pci')
-        xml_video_address.set('domain', '0x0000')
-        xml_video_address.set('bus', '0x00')
-        xml_video_address.set('slot', '0x02')
-        xml_video_address.set('function', '0x0')
+        for key, value in {'type': 'pci', 'domain': '0x0000', 'bus': '0x00', 
+                            'slot': '0x02', 'function': '0x0'}.iteritems():
+            xml_video_address.set(key, value)
     else:
         xml_type.text = 'exe'
         xml_init = ET.SubElement(xml_os, 'init')
@@ -451,8 +449,10 @@ def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype, net, type):
         xml_fs_target.set('dir', '/')
         xml_cs_target.set('type', 'lxc')
     tmpf = '/tmp/' + machname + '.xml'
-    ET.ElementTree(xml_root).write(tmpf)
-    print 'Temporary template written in', tmpf
+    pretty_xml = xml.dom.minidom.parseString(ET.tostring(xml_root)).toprettyxml()
+    with open(tmpf, 'w') as wf:
+        wf.write(pretty_xml)
+        print 'Temporary template written in', tmpf
     return ET.tostring(xml_root)
 
 # Return modified xml from imported file ready for defining guest 
