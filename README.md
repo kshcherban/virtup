@@ -27,7 +27,7 @@ You can have running guest in six steps.
 
 2\. Download one of prebuild boxes. You can download them from [here](http://yadi.sk/d/KJROKkGb6Xv7u)
 
-```wget -O ubuntu.tgz http://goo.gl/3H5yy8```
+```wget -O ubuntu.tgz http://goo.gl/ZQi9wI```
 
 3\. Unpack it
 
