@@ -100,7 +100,7 @@ class Disk:
         offset = 0
         length = size
         flags = 0
-        stream.download(vol, offset, length, flags)
+        vol.download(stream, offset, length, flags)
         # Open file
         f = open(src, 'w')
         # Start transfer
@@ -143,7 +143,7 @@ class Disk:
             offset = 0
             length = size
             flags = 0
-            stream.upload(vol, offset, length, flags)
+            vol.upload(stream, offset, length, flags)
             # Open source file
             fileobj = open(src, "r")
             # Start transfer
