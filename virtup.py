@@ -24,6 +24,7 @@ import termios
 import atexit
 import libvirt
 import argparse
+import xml.dom.minidom  # for pretty printing
 from multiprocessing import Pool
 from xml.etree import ElementTree as ET
 
@@ -51,7 +52,7 @@ class Disk:
 '''
 
     def vol_obj(self, obj):
-        """Return volume object independently of what provided: 
+        """Return volume object independently of what provided:
         volume object or name"""
         if not isinstance(obj, str):
             return obj
@@ -105,7 +106,7 @@ class Disk:
         f = open(src, 'w')
         # Start transfer
         total = 0
-        print ('Downloading volume {0} into {1}'.format(vol.name(), 
+        print ('Downloading volume {0} into {1}'.format(vol.name(),
                 os.path.abspath(src)))
         try:
             while True:
@@ -130,6 +131,7 @@ class Disk:
         vol = self.vol_obj(vol)
         # Build stream object
         stream = self.conn.newStream(0)
+
         def safe_send(data):
             while True:
                 ret = stream.send(data)
@@ -200,17 +202,18 @@ class Net:
         net = ET.fromstring(dom).find('.//interface/source').get('network')
         if not net:
             return ET.fromstring(dom).find('.//interface/source').get('bridge')
-        ifname = ET.fromstring(self.conn.networkLookupByName(net).XMLDesc(0)
-            ).find('.//bridge').get('name')
+        ifname = ET.fromstring(
+                self.conn.networkLookupByName(net).XMLDesc(0)
+                ).find('.//bridge').get('name')
         return ifname
-    
+
     @staticmethod
     def get_subnet(ifname):
         """Return CIDR got from /bin/ip output"""
         patt = re.compile(r'inet\s*(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/\d{1,3})')
         return patt.findall(os.popen('ip a s ' + ifname).read())[0]
 
-    @staticmethod 
+    @staticmethod
     def long2ip(l):
         """Convert a network byte order 32-bit integer to a dotted quad ip
         address.
@@ -221,7 +224,7 @@ class Net:
             raise TypeError(
             "expected int between %d and %d inclusive" % (MIN_IP, MAX_IP))
         return '%d.%d.%d.%d' % (l >> 24 & 255, l >> 16 & 255, l >> 8 & 255, l & 255)
-    
+
     @staticmethod
     def ip2long(ip):
         """Convert a dotted-quad ip address to a network byte order 32-bit
@@ -261,7 +264,7 @@ class Net:
         """Convert network block start and end address into a range of network
         addresses
         """
-        for j in range(1,5):
+        for j in range(1, 5):
             globals()["oct" + str(j)] = [i for i in range(int(start.split('.')[j-1]),
                 int(end.split('.')[j-1]) + 1)]
         iprange = []
@@ -294,10 +297,10 @@ def ping(ip):
 
 # Generate random MAC address
 def randomMAC():
-    mac = [ 0x00, 0x16, 0x3e,
+    mac = [0x00, 0x16, 0x3e,
         random.randint(0x00, 0x7f),
         random.randint(0x00, 0xff),
-        random.randint(0x00, 0xff) ]
+        random.randint(0x00, 0xff)]
     return ':'.join(map(lambda x: "%02x" % x, mac))
 
 # Guess image type
@@ -340,7 +343,7 @@ def get_stor(machname, pool=True):
         path = '/'.join(path.split('/')[:-1])
         data = conn.listStoragePools()
     else:
-        data = {i:conn.storagePoolLookupByName(i).listVolumes() for i in conn.listStoragePools()} 
+        data = {i: conn.storagePoolLookupByName(i).listVolumes() for i in conn.listStoragePools()}
     if isinstance(data, list):
         for p in data:
             o = conn.storagePoolLookupByName(p)
@@ -356,83 +359,92 @@ def get_stor(machname, pool=True):
 
 # Prepare template to import with virsh
 def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype, net):
+    type = 'kvm'
     if net == 'default':
         ntype = 'network'
     else:
         ntype = 'bridge'
     if dtype == 'file':
-        src = 'file'
+        dsrc = 'file'
     else:
-        src = 'dev'
-    tmpl = '''
-<domain type='kvm'>
-  <name>{0}</name>
-  <memory>{1}</memory>
-  <vcpu placement='static'>{2}</vcpu>
-  <os>
-    <type arch='x86_64' machine='pc'>hvm</type>
-    <boot dev='hd'/>
-  </os>
-  <features>
-    <acpi/>
-    <apic/>
-    <pae/>
-  </features>
-  <clock offset='utc'/>
-  <on_poweroff>destroy</on_poweroff>
-  <on_reboot>restart</on_reboot>
-  <on_crash>restart</on_crash>
-  <devices>
-    <disk type='{6}' device='disk'>
-      <driver name='qemu' type='{3}' cache='none' io='native'/>
-      <source {7}='{4}'/>
-      <target dev='vda' bus='virtio'/>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x05' function='0x0'/>
-    </disk>
-    <disk type='block' device='cdrom'>
-      <driver name='qemu' type='raw'/>
-      <target dev='hdc' bus='ide'/>
-      <readonly/>
-      <address type='drive' controller='0' bus='1' target='0' unit='0'/>
-    </disk>
-    <controller type='ide' index='0'>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x1'/>
-    </controller>
-    <interface type='{8}'>
-      <mac address='{5}'/>
-      <source {8}='{9}'/>
-      <model type='virtio'/>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
-    </interface>
-    <serial type='pty'>
-      <target port='0'/>
-    </serial>
-    <console type='pty'>
-      <target type='serial' port='0'/>
-    </console>
-    <input type='tablet' bus='usb'/>
-    <input type='mouse' bus='ps2'/>
-    <graphics type='vnc' port='-1' autoport='yes'/>
-    <sound model='ich6'>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
-    </sound>
-    <video>
-      <model type='cirrus' vram='9216' heads='1'/>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
-    </video>
-    <memballoon model='virtio'>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x06' function='0x0'/>
-    </memballoon>
-  </devices>
-</domain> '''.format(machname, mem, cpu, format, img, mac, dtype, src, ntype, net)
+        dsrc = 'dev'
+    xml_root = ET.Element('domain')
+    xml_root.set('type', type)
+    xml_name = ET.SubElement(xml_root, 'name')
+    xml_name.text = machname
+    xml_memory = ET.SubElement(xml_root, 'memory')
+    xml_memory.text = str(mem)
+    xml_cpu = ET.SubElement(xml_root, 'vcpu')
+    xml_cpu.set('placement', 'static')
+    xml_cpu.text = str(cpu)
+    xml_os = ET.SubElement(xml_root, 'os')
+    xml_type = ET.SubElement(xml_os, 'type')
+    xml_devices = ET.SubElement(xml_root, 'devices')
+    xml_interface = ET.SubElement(xml_devices, 'interface')
+    xml_interface.set('type', ntype)
+    xml_mac = ET.SubElement(xml_interface, 'mac')
+    xml_mac.set('address', mac)
+    xml_source = ET.SubElement(xml_interface, 'source')
+    xml_source.set(ntype, net)
+    xml_console = ET.SubElement(xml_devices, 'console')
+    xml_console.set('type', 'pty')
+    xml_cs_target = ET.SubElement(xml_console, 'target')
+    xml_cs_target.set('port', '0')
+    xml_cs_alias = ET.SubElement(xml_console, 'alias')
+    xml_cs_alias.set('name', 'console0')
+    if type == 'kvm':
+        xml_type.set('arch', 'x86_64')
+        xml_type.set('machine', 'pc')
+        xml_type.text = 'hvm'
+        xml_boot = ET.SubElement(xml_os, 'boot')
+        xml_boot.set('dev', 'hd')
+        xml_model = ET.SubElement(xml_interface, 'model')
+        xml_model.set('type', 'virtio')
+        xml_disk = ET.SubElement(xml_devices, 'disk')
+        xml_disk.set('type', dtype)
+        xml_disk.set('device', 'disk')
+        xml_disk_driver = ET.SubElement(xml_disk, 'driver')
+        for key, value in {'name': 'qemu', 'type': format, 'cache': 'none',
+                            'io': 'native'}.iteritems():
+            xml_disk_driver.set(key, value)
+        xml_disk_source = ET.SubElement(xml_disk, 'source')
+        xml_disk_source.set(dsrc, img)
+        xml_disk_target = ET.SubElement(xml_disk, 'target')
+        xml_disk_target.set('dev', 'vda')
+        xml_disk_target.set('bus', 'virtio')
+        xml_cs_target.set('type', 'serial')
+        xml_vnc = ET.SubElement(xml_devices, 'graphics')
+        xml_vnc.set('type', 'vnc')
+        xml_vnc.set('autoport', 'yes')
+        xml_video = ET.SubElement(xml_devices, 'video')
+        xml_video_model = ET.SubElement(xml_video, 'model')
+        xml_video_model.set('type', 'cirrus')
+        xml_video_model.set('vram', '9216')
+        xml_video_model.set('heads', '1')
+        xml_video_address = ET.SubElement(xml_video, 'address')
+        for key, value in {'type': 'pci', 'domain': '0x0000', 'bus': '0x00',
+                            'slot': '0x02', 'function': '0x0'}.iteritems():
+            xml_video_address.set(key, value)
+    else:
+        xml_type.text = 'exe'
+        xml_init = ET.SubElement(xml_os, 'init')
+        xml_init.text = '/sbin/init'
+        xml_filesystem = ET.SubElement(xml_devices, 'filesystem')
+        xml_filesystem.set('type', 'mount')
+        xml_filesystem.set('accessmode', 'passthrough')
+        xml_fs_source = ET.SubElement(xml_filesystem, 'source')
+        xml_fs_source.set('dir', img)
+        xml_fs_target = ET.SubElement(xml_filesystem, 'target')
+        xml_fs_target.set('dir', '/')
+        xml_cs_target.set('type', 'lxc')
     tmpf = '/tmp/' + machname + '.xml'
-    f = open(tmpf, 'w')
-    f.write(tmpl)
-    f.close()
-    print ('Temporary template written in {0}'.format(tmpf))
-    return tmpl
+    pretty_xml = xml.dom.minidom.parseString(ET.tostring(xml_root)).toprettyxml()
+    with open(tmpf, 'w') as wf:
+        wf.write(pretty_xml)
+        print 'Temporary template written in', tmpf
+    return ET.tostring(xml_root)
 
-# Return modified xml from imported file ready for defining guest 
+# Return modified xml from imported file ready for defining guest
 def xml2tmpl(xmlf, machname, image=None, format=None, dtype=None):
     xe = ET.fromstring(xmlf)
     # Remove values that may cause error
@@ -479,8 +491,8 @@ def lsvirt(storage, volumes):
     if volumes:
         # Find list of machines and create dict with list of vols associated to them
         ml = [conn.lookupByID(i).name() for i in conn.listDomainsID()] + conn.listDefinedDomains()
-        md = {get_stor(i, 0):i for i in ml}
-        print ('{0:<15}{1:<30}{2:<10}{3:<10}{4:<10}'.format('Pool', 'Volume', 'Size', 
+        md = {get_stor(i, 0): i for i in ml}
+        print ('{0:<15}{1:<30}{2:<10}{3:<10}{4:<10}'.format('Pool', 'Volume', 'Size',
                 'Use', 'Used by'))
         for p in pools:
             pinf = conn.storagePoolLookupByName(p).info()
@@ -491,8 +503,8 @@ def lsvirt(storage, volumes):
                 if v not in md:
                     md[v] = None
                 vinf = conn.storagePoolLookupByName(p).storageVolLookupByName(v).info()
-                use = '{0:.2%}'.format(float(vinf[2]) / float(pinf[1])) 
-                print ('{0:<15}{1:<30}{2:<10}{3:<10}{4:<10}'.format(' ', v, 
+                use = '{0:.2%}'.format(float(vinf[2]) / float(pinf[1]))
+                print ('{0:<15}{1:<30}{2:<10}{3:<10}{4:<10}'.format(' ', v,
                         convert_bytes(vinf[2]), use, md[v]))
         sys.exit(0)
     # List machines
@@ -500,7 +512,7 @@ def lsvirt(storage, volumes):
     print ('{0:<30}{1:<15}{2:<15}{3:>10}'.format('Name', 'CPUs', 'Memory', 'State'))
     for i in sorted(vsorted):
         j = conn.lookupByName(i).info()
-        print ('{0:<30}{1:<15}{2:<15}{3:>10}'.format(i, j[3], 
+        print ('{0:<30}{1:<15}{2:<15}{3:>10}'.format(i, j[3],
             convert_bytes(j[2] * 1024), 'up'))
     for i in sorted(conn.listDefinedDomains()):
         j = conn.lookupByName(i).info()
