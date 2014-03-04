@@ -358,16 +358,18 @@ def get_stor(machname, pool=True):
     return None
 
 # Prepare template to import with virsh
-def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype, net):
-    type = 'kvm'
+def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype, net, type=None):
     if net == 'default':
         ntype = 'network'
     else:
         ntype = 'bridge'
-    if dtype == 'file':
-        dsrc = 'file'
+    if type == 'kvm':
+        if dtype == 'file':
+            dsrc = 'file'
+        else:
+            dsrc = 'dev'
     else:
-        dsrc = 'dev'
+        dtype = 'mount'
     xml_root = ET.Element('domain')
     xml_root.set('type', type)
     xml_name = ET.SubElement(xml_root, 'name')
@@ -492,7 +494,7 @@ def lsvirt(storage, volumes):
         # Find list of machines and create dict with list of vols associated to them
         ml = [conn.lookupByID(i).name() for i in conn.listDomainsID()] + conn.listDefinedDomains()
         md = {get_stor(i, 0): i for i in ml}
-        print ('{0:<15}{1:<30}{2:<10}{3:<10}{4:<10}'.format('Pool', 'Volume', 'Size',
+        print ('{0:<15}{1:<30}{2:<10}{3:<template = xml2tmpl(args.xml.read(), args.name, image, format, dtype)10}{4:<10}'.format('Pool', 'Volume', 'Size',
                 'Use', 'Used by'))
         for p in pools:
             pinf = conn.storagePoolLookupByName(p).info()
@@ -538,6 +540,12 @@ def convert_bytes(bytes):
     else:
         size = '%.2fb' % bytes
     return size
+
+#Check uri connection type
+def uri_lxc(uri):
+    if re.findall('lxc', uri[:7]):
+        return True
+    return False
 
 # Functions to operate with terminal. Required for console option
 def reset_term():
@@ -675,29 +683,40 @@ if __name__ == '__main__':
             sys.exit(1)
         mem = argcheck(args.mem)
         mac = randomMAC()
-        if args.xml:
-            xml = args.xml.read()
-        if not args.image:
-            upload = False
-        else:
-            if not os.path.isfile(args.image):
-                print ('{0} not found'.format(args.image))
-                sys.exit(1)
-            format = find_image_format(args.image)
-            imgsize = os.path.getsize(args.image)
-            upload = True
-            image = Disk(conn, args.pool).create_vol(args.name, imgsize, format)
-            if is_lvm(args.pool):
-                dtype = 'block'
-            else:
-                dtype = 'file'
-            if args.xml:
-                template = xml2tmpl(xml, args.name, image, format, dtype)
         if args.xml and not args.image:
-            template = xml2tmpl(xml, args.name)
-        elif not args.xml:
-            template = prepare_tmpl(args.name, mac, args.cpus, mem, image, format,
-                dtype, args.net)
+            upload = False
+            template = xml2tmpl(args.xml.read(), args.name)
+        else:
+            # LXC
+            if uri_lxc(args.uri):
+                upload = False
+                if not os.path.isdir(args.image):
+                    if not args.xml:
+                        print('No image and xml specified')
+                        sys.exit(1)
+                elif not args.xml:
+                    template = prepare_tmpl(args.name, mac, args.cpus, mem,
+                                            args.image, '', '', args.net, 'lxc')
+                else:
+                    template = xml2tmpl(args.xml.read(), args.name, args.image,
+                                        'format', 'mount')
+            else:   # QEMU
+                if not os.path.isfile(args.image):
+                    print ('{0} not found'.format(args.image))
+                    sys.exit(1)
+                format = find_image_format(args.image)
+                imgsize = os.path.getsize(args.image)
+                upload = True
+                image = Disk(conn, args.pool).create_vol(args.name, imgsize, format)
+                if is_lvm(args.pool):
+                    dtype = 'block'
+                else:
+                    dtype = 'file'
+                if args.xml:
+                    template = xml2tmpl(xml, args.name, image, format, dtype)
+                elif not args.xml:
+                    template = prepare_tmpl(args.name, mac, args.cpus, mem, image,
+                                            format, dtype, args.net, 'kvm')
         try:
             conn.defineXML(template)
             print ('{0} added'.format(args.name))
