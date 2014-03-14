@@ -713,7 +713,7 @@ if __name__ == '__main__':
                 else:
                     dtype = 'file'
                 if args.xml:
-                    template = xml2tmpl(xml, args.name, image, format, dtype)
+                    template = xml2tmpl(args.xml.read(), args.name, image, format, dtype)
                 elif not args.xml:
                     template = prepare_tmpl(args.name, mac, args.cpus, mem, image,
                                             format, dtype, args.net, 'kvm')
