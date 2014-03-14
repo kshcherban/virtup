@@ -358,7 +358,7 @@ def get_stor(machname, pool=True):
     return None
 
 # Prepare template to import with virsh
-def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype, net, type=None):
+def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype, net, type='kvm'):
     if net == 'default':
         ntype = 'network'
     else:
