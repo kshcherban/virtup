@@ -639,6 +639,20 @@ box_resume = subparsers.add_parser('resume', parents=[suparent],
         description='Resume virtual machine from file')
 box_resume.add_argument('-f', metavar='FILE',
         help='file from which machine state will be resumed, default is ./<name>.sav')
+box_vol = subparsers.add_parser('vol', help='Manage virtual volumes',
+        description='Create or remove virtual volumes')
+box_vol.add_argument('volume', type=str, help='virtual volume name')
+box_vol.add_argument('-p', dest='pool', metavar='POOL', type=str,
+        default='default',
+        help='storage pool name, default is "default"')
+box_vol.add_argument('-s', dest='size', metavar='SIZE', type=str,
+        default='8G',
+        help='volume size, can be M or G, default is 8G')
+action = box_vol.add_mutually_exclusive_group(required=True)
+action.add_argument('--add', action='store_true',
+        help='create virtual volume')
+action.add_argument('--del', action='store_true',
+        help='remove virtual volume')
 help_c = subparsers.add_parser('help')
 help_c.add_argument('command', nargs="?", default=None)
 
@@ -857,3 +871,13 @@ if __name__ == '__main__':
         stream.eventAddCallback(libvirt.VIR_STREAM_EVENT_READABLE, stream_callback, None)
         while run_console:
                 libvirt.virEventRunDefaultImpl()
+
+# Volume section
+    if args.sub == 'vol':
+        if args.add:
+            imgsize = argcheck(args.size) * 1024
+            Disk(conn, args.pool).create_vol(args.volume, imgsize, 'raw')
+            print ('Volume {0} created'.format(args.volume))
+        else:
+            Disk(conn, args.pool).delete_vol(args.volume)
+            print ('Volume {0} removed'.format(args.volume))
