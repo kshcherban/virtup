@@ -357,6 +357,15 @@ def get_stor(machname, pool=True):
                     return v
     return None
 
+# Return list of volumes for specified virtual machine
+def get_vol(machname):
+    try:
+        dom = conn.lookupByName(machname)
+    except libvirt.libvirtError:
+        sys.exit(1)
+    xe = ET.fromstring(dom.XMLDesc(0))
+    return [vol.items()[0][1].split('/')[-1] for vol in xe.findall('.//devices/disk/source')]
+
 # Prepare template to import with virsh
 def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype, net, type='kvm'):
     if net == 'default':
@@ -493,21 +502,26 @@ def lsvirt(storage, volumes):
     if volumes:
         # Find list of machines and create dict with list of vols associated to them
         ml = [conn.lookupByID(i).name() for i in conn.listDomainsID()] + conn.listDefinedDomains()
-        md = {get_stor(i, 0): i for i in ml}
         print ('{0:<15}{1:<30}{2:<10}{3:<10}{4:<10}'.format('Pool', 'Volume', 'Size',
                 'Use', 'Used by'))
         for p in pools:
+            vols = conn.storagePoolLookupByName(p).listVolumes()
+            vol_dict = {}
+            for mach in ml:
+                associated_vols = get_vol(mach)
+                if associated_vols:
+                    for v in associated_vols:
+                        vol_dict[v] = mach
             pinf = conn.storagePoolLookupByName(p).info()
             print (p)
             print ('{0:>15}'.format('\\'))
-            vols = conn.storagePoolLookupByName(p).listVolumes()
             for v in sorted(vols):
-                if v not in md:
-                    md[v] = None
+                if v not in vol_dict:
+                    vol_dict[v] = None
                 vinf = conn.storagePoolLookupByName(p).storageVolLookupByName(v).info()
                 use = '{0:.2%}'.format(float(vinf[2]) / float(pinf[1]))
                 print ('{0:<15}{1:<30}{2:<10}{3:<10}{4:<10}'.format(' ', v,
-                        convert_bytes(vinf[2]), use, md[v]))
+                        convert_bytes(vinf[2]), use, vol_dict[v]))
         sys.exit(0)
     # List machines
     vsorted = [conn.lookupByID(i).name() for i in conn.listDomainsID()]
