@@ -830,7 +830,7 @@ if __name__ == '__main__':
             print ('{0} removed'.format(args.name))
         except libvirt.libvirtError:
             sys.exit(1)
-        if args.full:
+        if args.full and vol:
             Disk(conn, pool).delete_vol(vol)
             print ('Volume {0} removed'.format(vol))
 
