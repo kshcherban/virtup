@@ -456,7 +456,7 @@ def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype, net, type='kvm'):
     return ET.tostring(xml_root)
 
 # Return modified xml from imported file ready for defining guest
-def xml2tmpl(xmlf, machname, image=None, format=None, dtype=None):
+def xml2tmpl(xmlf, machname, image=None, format=None, dtype=None, mac=None):
     xe = ET.fromstring(xmlf)
     # Remove values that may cause error
     try:
@@ -475,6 +475,9 @@ def xml2tmpl(xmlf, machname, image=None, format=None, dtype=None):
             stype = 'dev'
         xe.find('.//devices/disk/driver').set('type', format)
         xe.find('.//devices/disk/source').set(stype, image)
+    if mac:
+        xe.find('.//devices/interface/mac').set('address', mac)
+
     return ET.tostring(xe)
 
 def argcheck(arg):
@@ -555,6 +558,14 @@ def convert_bytes(bytes):
         size = '%.2fb' % bytes
     return size
 
+# Check for MAC address correctness
+def is_mac_addr(mac):
+    """Return True if provided argument is L2 (MAC) address"""
+    mac = mac.rstrip().lower()
+    if re.match("[0-9a-f]{2}(:)[0-9a-f]{2}(\\1[0-9a-f]{2}){4}$", mac):
+        return True
+    return False
+
 #Check uri connection type
 def uri_lxc(uri):
     if re.findall('lxc', uri[:7]):
@@ -602,6 +613,8 @@ parent.add_argument('-m', dest='mem', metavar='RAM', type=str, default='512M',
 parent.add_argument('-p', dest='pool', metavar='POOL', type=str,
         default='default',
         help='storage pool name, default is "default"')
+parent.add_argument('-mac', dest='mac', metavar='MAC', type=str,
+        help='MAC address in format 00:00:00:00:00:00')
 box_add = subparsers.add_parser('add', parents=[parent, suparent],
         description='Add virtual machine from image file or XML description',
         help='Add virtual machine from image/XML file')
@@ -710,10 +723,16 @@ if __name__ == '__main__':
             print ('Either -xml or -i should be specified')
             sys.exit(1)
         mem = argcheck(args.mem)
-        mac = randomMAC()
+        if not args.mac:
+            mac = randomMAC()
+        elif not is_mac_addr(args.mac):
+            print ('Incorrect mac address: {0}'.format(args.mac))
+            sys.exit(1)
+        else:
+            mac = args.mac
         if args.xml and not args.image:
             upload = False
-            template = xml2tmpl(args.xml.read(), args.name)
+            template = xml2tmpl(args.xml.read(), args.name, mac=mac)
         else:
             # LXC
             if uri_lxc(args.uri):
@@ -727,7 +746,7 @@ if __name__ == '__main__':
                                             args.image, '', '', args.net, 'lxc')
                 else:
                     template = xml2tmpl(args.xml.read(), args.name, args.image,
-                                        'format', 'mount')
+                                        'format', 'mount', mac)
             else:   # QEMU
                 if not os.path.isfile(args.image):
                     print ('{0} not found'.format(args.image))
@@ -741,7 +760,7 @@ if __name__ == '__main__':
                 else:
                     dtype = 'file'
                 if args.xml:
-                    template = xml2tmpl(args.xml.read(), args.name, image, format, dtype)
+                    template = xml2tmpl(args.xml.read(), args.name, image, format, dtype, mac)
                 elif not args.xml:
                     template = prepare_tmpl(args.name, mac, args.cpus, mem, image,
                                             format, dtype, args.net, 'kvm')
@@ -759,7 +778,13 @@ if __name__ == '__main__':
 # Create section
     if args.sub == 'create':
         mem = argcheck(args.mem)
-        mac = randomMAC()
+        if not args.mac:
+            mac = randomMAC()
+        elif not is_mac_addr(args.mac):
+            print ('Incorrect mac address: {0}'.format(args.mac))
+            sys.exit(1)
+        else:
+            mac = args.mac
         format = 'raw'
         imgsize = argcheck(args.size) * 1024
         args.image = args.name
