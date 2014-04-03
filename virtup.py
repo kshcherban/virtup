@@ -565,6 +565,8 @@ def convert_bytes(bytes):
 # Check for MAC address correctness
 def is_mac_addr(mac):
     """Return True if provided argument is L2 (MAC) address"""
+    if mac is None:
+        return True
     mac = mac.rstrip().lower()
     if re.match("[0-9a-f]{2}(:)[0-9a-f]{2}(\\1[0-9a-f]{2}){4}$", mac):
         return True
@@ -727,7 +729,7 @@ if __name__ == '__main__':
             print ('Either -xml or -i should be specified')
             sys.exit(1)
         mem = argcheck(args.mem)
-        if not args.mac:
+        if not args.mac and not args.xml:
             mac = randomMAC()
         elif not is_mac_addr(args.mac):
             print ('Incorrect mac address: {0}'.format(args.mac))
