@@ -481,7 +481,6 @@ def xml2tmpl(xmlf, machname, image=None, format=None, dtype=None, mac=None):
         xe.find('.//devices/disk/source').set(stype, image)
     if mac:
         xe.find('.//devices/interface/mac').set('address', mac)
-
     return ET.tostring(xe)
 
 def argcheck(arg):
