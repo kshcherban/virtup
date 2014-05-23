@@ -644,6 +644,8 @@ box_export.add_argument('-i', dest='image', type=str,
         help='image file name to export disk image')
 box_ls = subparsers.add_parser('ls', help='List virtual machines',
         description='List existing virtual machines, active storage pools, ip addresses')
+box_ls.add_argument('-i', dest='info', action='store_true',
+        help='print information about hypervisor hardware')
 box_ls.add_argument('-s', dest='storage', action='store_true',
         help='list active storage pools')
 box_ls.add_argument('-ip', dest='ip', action='store_true',
@@ -709,9 +711,10 @@ if __name__ == '__main__':
 
 # Ls command section
     if args.sub == 'ls':
-        if args.ip + args.storage + args.volumes + args.net >= 2:
+        if args.ip + args.storage + args.volumes + args.net + args.info >= 2:
             print ('Please specify only one option at a time')
             sys.exit(1)
+        vsorted = [conn.lookupByID(i).name() for i in conn.listDomainsID()]
         if args.net:
             print ('{0:<30}{1:<15}'.format('Interfaces','Status'))
             for i in conn.listInterfaces():
@@ -719,11 +722,22 @@ if __name__ == '__main__':
             for i in conn.listDefinedInterfaces():
                 print ('{0:<30}{1:<15}'.format(i, 'inactive'))
             sys.exit(0)
+        if args.info:
+            hyper_info = conn.getInfo()
+            used_mem = sum([conn.lookupByName(i).info()[2] for i in vsorted])
+            print ('{0:<30}{1:<15}'.format('Hostname:', conn.getHostname()))
+            print ('{0:<30}{1:<15}'.format('CPU count:', hyper_info[2]))
+            print ('{0:<30}{1:<15}'.format('CPU MHz:', hyper_info[3]))
+            print ('{0:<30}{1:<15}'.format('Architecture:', hyper_info[0]))
+            print ('{0:<30}{1:<15}'.format('Memory total:', str(hyper_info[1]) + 'MB'))
+            print ('{0:<30}{1:<15}'.format('Memory used:', str(used_mem / 1024) + 'MB'))
+            print ('{0:<30}{1:<15}'.format('Memory free:',
+                str(hyper_info[1] - used_mem / 1024) + 'MB'))
+            sys.exit(0)
         if not args.ip:
             lsvirt(args.storage, args.volumes)
             sys.exit(0)
         if args.uri == 'qemu:///system':
-            vsorted = [conn.lookupByID(i).name() for i in conn.listDomainsID()]
             print ('{0:<30}{1:<15}'.format('Name', 'IP'))
             for i in sorted(vsorted):
                 ip = Net(conn).ip(i)
