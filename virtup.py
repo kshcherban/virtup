@@ -648,6 +648,8 @@ box_ls.add_argument('-s', dest='storage', action='store_true',
         help='list active storage pools')
 box_ls.add_argument('-ip', dest='ip', action='store_true',
         help='list ip of running virtual machines')
+box_ls.add_argument('-net', dest='net', action='store_true',
+        help='list ip of hypervisor network interfaces')
 box_ls.add_argument('-v', dest='volumes', action='store_true',
         help='list active volumes')
 box_rm = subparsers.add_parser('rm', parents=[suparent],
@@ -707,9 +709,16 @@ if __name__ == '__main__':
 
 # Ls command section
     if args.sub == 'ls':
-        if args.ip + args.storage + args.volumes >= 2:
+        if args.ip + args.storage + args.volumes + args.net >= 2:
             print ('Please specify only one option at a time')
             sys.exit(1)
+        if args.net:
+            print ('{0:<30}{1:<15}'.format('Interfaces','Status'))
+            for i in conn.listInterfaces():
+                print ('{0:<30}{1:<15}'.format(i, 'active'))
+            for i in conn.listDefinedInterfaces():
+                print ('{0:<30}{1:<15}'.format(i, 'inactive'))
+            sys.exit(0)
         if not args.ip:
             lsvirt(args.storage, args.volumes)
             sys.exit(0)
