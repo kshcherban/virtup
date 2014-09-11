@@ -37,7 +37,7 @@ You can have running guest in six steps.
 specified
 
 ```
-./virtup.py add -i ubuntu-12.04-amd64.img ubuntu64
+./virtup.py import -i ubuntu-12.04-amd64.img ubuntu64
 Uploading template into volume ubuntu64
 done 100.00%
 Temporary template written in /tmp/ubuntu64.xml

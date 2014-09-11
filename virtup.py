@@ -115,7 +115,7 @@ class Disk:
                     break
                 f.write(ret)
                 total += len(ret)
-                sys.stderr.write('\rdone {0:.2%}'.format(float(total)/size))
+                sys.stderr.write('\rdone {0:.2%}'.format(float(total) / size))
             # Cleanup
             stream.finish()
             f.close()
@@ -159,7 +159,7 @@ class Disk:
                     break
                 safe_send(data)
                 total += len(data)
-                sys.stderr.write('\rdone {0:.2%}'.format(float(total)/size))
+                sys.stderr.write('\rdone {0:.2%}'.format(float(total) / size))
             # Cleanup
             stream.finish()
             print('')
@@ -204,7 +204,7 @@ class Net:
             return ET.fromstring(dom).find('.//interface/source').get('bridge')
         ifname = ET.fromstring(
                 self.conn.networkLookupByName(net).XMLDesc(0)
-                ).find('.//bridge').get('name')
+                            ).find('.//bridge').get('name')
         return ifname
 
     @staticmethod
@@ -265,7 +265,7 @@ class Net:
         addresses
         """
         for j in range(1, 5):
-            globals()["oct" + str(j)] = [i for i in range(int(start.split('.')[j-1]),
+            globals()["oct" + str(j)] = [i for i in range(int(start.split('.')[j - 1]),
                 int(end.split('.')[j-1]) + 1)]
         iprange = []
         for i in oct1:
@@ -295,6 +295,7 @@ def ping(ip):
         os.popen("ping -W1 -q -c1 " + ip + ' 2>/dev/null')
         return 0
 
+
 # Generate random MAC address
 def randomMAC():
     mac = [0x00, 0x16, 0x3e,
@@ -302,6 +303,7 @@ def randomMAC():
         random.randint(0x00, 0xff),
         random.randint(0x00, 0xff)]
     return ':'.join(map(lambda x: "%02x" % x, mac))
+
 
 # Guess image type
 def find_image_format(filepath):
@@ -319,12 +321,14 @@ def find_image_format(filepath):
         return 'vmdk'
     return 'raw'
 
+
 # Check if storage pool is LVM or dir
 def is_lvm(pool):
     s = conn.storagePoolLookupByName(pool)
     if ET.fromstring(s.XMLDesc(0)).get('type') == 'logical':
         return 1
     return 0
+
 
 # Get pool or volume name for given guest
 def get_stor(machname, pool=True):
@@ -357,6 +361,7 @@ def get_stor(machname, pool=True):
                     return v
     return None
 
+
 # Return list of volumes for specified virtual machine
 def get_vol(machname):
     try:
@@ -365,6 +370,7 @@ def get_vol(machname):
         sys.exit(1)
     xe = ET.fromstring(dom.XMLDesc(0))
     return [vol.items()[0][1].split('/')[-1] for vol in xe.findall('.//devices/disk/source')]
+
 
 # Prepare template to import with virsh
 def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype, net, type='kvm'):
@@ -459,6 +465,7 @@ def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype, net, type='kvm'):
         print 'Temporary template written in', tmpf
     return ET.tostring(xml_root)
 
+
 # Return modified xml from imported file ready for defining guest
 def xml2tmpl(xmlf, machname, image=None, format=None, dtype=None, mac=None):
     xe = ET.fromstring(xmlf)
@@ -483,6 +490,7 @@ def xml2tmpl(xmlf, machname, image=None, format=None, dtype=None, mac=None):
         xe.find('.//devices/interface/mac').set('address', mac)
     return ET.tostring(xe)
 
+
 def argcheck(arg):
     if arg[-1].lower() == 'm':
         return int(arg[:-1]) * 1024
@@ -491,6 +499,7 @@ def argcheck(arg):
     else:
         print ('Error! Format can be <int>M or <int>G')
         sys.exit(1)
+
 
 def lsvirt(storage, volumes):
     pools = sorted(conn.listStoragePools())
@@ -542,6 +551,7 @@ def lsvirt(storage, volumes):
             convert_bytes(j[2] * 1024), 'down'))
     sys.exit(0)
 
+
 # Converting bytes to human-readable
 def convert_bytes(bytes):
     bytes = float(bytes)
@@ -561,6 +571,7 @@ def convert_bytes(bytes):
         size = '%.2fb' % bytes
     return size
 
+
 # Check for MAC address correctness
 def is_mac_addr(mac):
     """Return True if provided argument is L2 (MAC) address"""
@@ -571,15 +582,18 @@ def is_mac_addr(mac):
         return True
     return False
 
-#Check uri connection type
+
+# Check uri connection type
 def uri_lxc(uri):
     if re.findall('lxc', uri[:7]):
         return True
     return False
 
+
 # Functions to operate with terminal. Required for console option
 def reset_term():
     termios.tcsetattr(0, termios.TCSADRAIN, attrs)
+
 
 def stdin_callback(watch, fd, events, unused):
     global run_console
@@ -588,6 +602,7 @@ def stdin_callback(watch, fd, events, unused):
         run_console = False
         return
     stream.send(readbuf)
+
 
 def stream_callback(stream, events, unused):
     global run_console
@@ -620,9 +635,9 @@ parent.add_argument('-p', dest='pool', metavar='POOL', type=str,
         help='storage pool name, default is "default"')
 parent.add_argument('-mac', dest='mac', metavar='MAC', type=str,
         help='MAC address in format 00:00:00:00:00:00')
-box_add = subparsers.add_parser('add', parents=[parent, suparent],
-        description='Add virtual machine from image file or XML description',
-        help='Add virtual machine from image/XML file')
+box_add = subparsers.add_parser('import', parents=[parent, suparent],
+        description='Import virtual machine from image file or XML description',
+        help='Import virtual machine from image/XML file')
 box_add.add_argument('-i', dest='image', type=str, metavar='IMAGE',
         help='template image file location')
 box_add.add_argument('-xml', dest='xml', type=argparse.FileType('r'),
@@ -694,7 +709,7 @@ help_c.add_argument('command', nargs="?", default=None)
 
 
 if __name__ == '__main__':
-# Help command emulation
+    # Help command emulation
     if len(sys.argv) < 2:
         parser.parse_args(['--help'])
     args = parser.parse_args()
@@ -716,7 +731,7 @@ if __name__ == '__main__':
             sys.exit(1)
         vsorted = [conn.lookupByID(i).name() for i in conn.listDomainsID()]
         if args.net:
-            print ('{0:<30}{1:<15}'.format('Interfaces','Status'))
+            print ('{0:<30}{1:<15}'.format('Interfaces', 'Status'))
             for i in conn.listInterfaces():
                 print ('{0:<30}{1:<15}'.format(i, 'active'))
             for i in conn.listDefinedInterfaces():
@@ -745,8 +760,8 @@ if __name__ == '__main__':
         else:
             print ('Not available for remote connections')
 
-# Add and Create section
-    if args.sub == 'add':
+# Import and Create section
+    if args.sub == 'import':
         if not args.xml and not args.image:
             print ('Either -xml or -i should be specified')
             sys.exit(1)
@@ -794,7 +809,7 @@ if __name__ == '__main__':
                                             format, dtype, args.net, 'kvm')
         try:
             conn.defineXML(template)
-            print ('{0} added'.format(args.name))
+            print ('{0} imported'.format(args.name))
         except libvirt.libvirtError:
             sys.exit(1)
         if upload:
@@ -933,8 +948,11 @@ if __name__ == '__main__':
             sys.exit(1)
         print ('Escape character is ^] press Enter')
         run_console = True
-        stdin_watch = libvirt.virEventAddHandle(0, libvirt.VIR_EVENT_HANDLE_READABLE,
-                stdin_callback, None)
+        stdin_watch = libvirt.virEventAddHandle(
+            0,
+            libvirt.VIR_EVENT_HANDLE_READABLE,
+            stdin_callback,
+            None)
         stream.eventAddCallback(libvirt.VIR_STREAM_EVENT_READABLE, stream_callback, None)
         while run_console:
                 libvirt.virEventRunDefaultImpl()
