@@ -37,19 +37,26 @@ class Disk:
     def __init__(self, conn, pool):
         self.conn = conn
         self.pool = pool
-        self.voltmpl = '''
-<volume>
-  <name>{0}</name>
-  <capacity>{1}</capacity>
-  <target>
-    <path>{2}/{0}</path>
-    <format type='{3}'/>
-    <permissions>
-      <mode>0660</mode>
-    </permissions>
-  </target>
-</volume>
-'''
+
+    def vol_tmpl(self, imgtype, name, capacity, path):
+        """Generate volume template based on disk type"""
+        tmpl_root = ET.Element('volume')
+        tmpl_name = ET.SubElement(tmpl_root, 'name')
+        tmpl_name.text = name
+        tmpl_cap = ET.SubElement(tmpl_root, 'capacity')
+        tmpl_cap.text = str(capacity)
+        tmpl_target = ET.SubElement(tmpl_root, 'target')
+        tmpl_target_path = ET.SubElement(tmpl_target, 'path')
+        tmpl_target_path.text = path + '/' + name
+        tmpl_target_perm = ET.SubElement(tmpl_target, 'permissions')
+        tmpl_target_perm_mode = ET.SubElement(tmpl_target_perm, 'mode')
+        tmpl_target_perm_mode.text = '0600'
+        tmpl_target_format = ET.SubElement(tmpl_target, 'format')
+        tmpl_target_format.set('type', imgtype)
+        if imgtype == 'qcow2':
+            tmpl_alloc = ET.SubElement(tmpl_root, 'allocation')
+            tmpl_alloc.text = '536576'
+        return ET.tostring(tmpl_root)
 
     def vol_obj(self, obj):
         """Return volume object independently of what provided:
@@ -73,7 +80,7 @@ class Disk:
         xe = ET.fromstring(s.XMLDesc(0))
         # find storage pool path
         spath = xe.find('.//path').text
-        tmpl = self.voltmpl.format(name, imgsize, spath, imgtype)
+        tmpl = self.vol_tmpl(imgtype, name, imgsize, spath)
         try:
             v = s.createXML(tmpl, 0)
         except libvirt.libvirtError:
@@ -650,6 +657,9 @@ box_create = subparsers.add_parser('create', parents=[parent, suparent],
         help='Create virtual machine')
 box_create.add_argument('-s', dest='size', type=str, default='8G',
         help='disk image size, can be M or G, default is 8G')
+box_create.add_argument('-f', '--disk-format', dest='dformat', type=str,
+        default='raw',
+        help='disk image format type, can be raw,bochs,qcow,qcow2,qed,vmdk, default is raw')
 box_export = subparsers.add_parser('export', parents=[suparent],
         description='Export virtual machine description/disk image',
         help='Export virtual machine')
@@ -828,7 +838,7 @@ if __name__ == '__main__':
             sys.exit(1)
         else:
             mac = args.mac
-        format = 'raw'
+        format = args.dformat
         imgsize = argcheck(args.size) * 1024
         args.image = args.name
         if is_lvm(args.pool):
