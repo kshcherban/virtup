@@ -547,15 +547,26 @@ def lsvirt(storage, volumes):
         sys.exit(0)
     # List machines
     vsorted = [conn.lookupByID(i).name() for i in conn.listDomainsID()]
-    print ('{0:<30}{1:<15}{2:<15}{3:>10}'.format('Name', 'CPUs', 'Memory', 'State'))
+    # Function to return basic domain info
+    def dinfo(domain):
+        d = conn.lookupByName(domain)
+        j = d.info()
+        if d.autostart():
+            a = 'on'
+        else:
+            a = 'off'
+        if d.isActive():
+            state = 'up'
+        else:
+            state = 'down'
+        print ('{0:<30}{1:<10}{2:<10}{3:<10}{4:>5}'.format(i, j[3],
+            convert_bytes(j[1] * 1024), state, a))
+    print ('{0:<30}{1:<10}{2:<10}{3:<10}{4:>5}'.format('Name', 'CPUs', 'Memory',
+            'State', 'Autostart'))
     for i in sorted(vsorted):
-        j = conn.lookupByName(i).info()
-        print ('{0:<30}{1:<15}{2:<15}{3:>10}'.format(i, j[3],
-            convert_bytes(j[2] * 1024), 'up'))
+        dinfo(i)
     for i in sorted(conn.listDefinedDomains()):
-        j = conn.lookupByName(i).info()
-        print ('{0:<30}{1:<15}{2:<15}{3:>10}'.format(i, j[3],
-            convert_bytes(j[2] * 1024), 'down'))
+        dinfo(i)
     sys.exit(0)
 
 
