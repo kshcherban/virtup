@@ -653,6 +653,11 @@ parent.add_argument('-p', dest='pool', metavar='POOL', type=str,
         help='storage pool name, default is "default"')
 parent.add_argument('-mac', dest='mac', metavar='MAC', type=str,
         help='MAC address in format 00:00:00:00:00:00')
+box_auto = subparsers.add_parser('autostart', parents=[suparent],
+        description='Set autostart flag for virtual machine',
+        help='Set autostart flag')
+box_auto.add_argument('-set', dest='auto', choices=['on', 'off'], required=True,
+        help='Flag can be on or off, required')
 box_add = subparsers.add_parser('import', parents=[parent, suparent],
         description='Import virtual machine from image file or XML description',
         help='Import virtual machine from image/XML file')
@@ -744,6 +749,19 @@ if __name__ == '__main__':
         conn = libvirt.open(args.uri)
     except libvirt.libvirtError:
         sys.exit(1)
+
+# Autostart section
+    if args.sub == 'autostart':
+        try:
+            dom = conn.lookupByName(args.name)
+            if args.auto == 'on':
+                auto = 1
+            else:
+                auto = 0
+            dom.setAutostart(auto)
+            print ('{0} autostart {1}'.format(args.name, args.auto))
+        except libvirt.libvirtError:
+            sys.exit(1)
 
 # Ls command section
     if args.sub == 'ls':
