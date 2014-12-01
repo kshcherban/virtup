@@ -27,34 +27,34 @@ You can have running guest in six steps.
 
 2\. Download one of prebuild boxes. You can download them from [here](http://yadi.sk/d/KJROKkGb6Xv7u)
 
-```wget -O ubuntu.tgz http://goo.gl/5p4DjB```
+```wget -O debian.xz http://goo.gl/queYqC```
 
 3\. Unpack it
 
-```tar -xzf ubuntu.tgz```
+```unxz debian.xz```
 
 4\. Import it with preferred name, optionally memory, cpu, net and storage pool can be
 specified
 
 ```
-./virtup.py import -i ubuntu-12.04-amd64.img ubuntu64
-Uploading template into volume ubuntu64
+./virtup.py import -i debian-6-amd64.img debian
+Uploading template into volume debian
 done 100.00%
-Temporary template written in /tmp/ubuntu64.xml
-ubuntu64 created, you can start it now
+Temporary template written in /tmp/debian.xml
+debian created, you can start it now
 ```
 
 5\. Start it
 
 ```
-./virtup.py up ubuntu64
-ubuntu64 started
+./virtup.py up debian
+debian started
 ```
 
 6\. Open console of virtual machine.  
 Also template used in example has passswordless ssh root login.
 
-    ./virtup.py console ubuntu64
+    ./virtup.py console debian
 
 ## Templates creation
 Create virtual machine with ```create``` command or with virsh.  
