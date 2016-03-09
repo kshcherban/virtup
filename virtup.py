@@ -433,7 +433,7 @@ def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype, net, type='kvm'):
         xml_disk.set('device', 'disk')
         xml_disk_driver = ET.SubElement(xml_disk, 'driver')
         for key, value in {'name': 'qemu', 'type': format, 'cache': 'none',
-                            'io': 'native'}.iteritems():
+                'cache.direct': 'on', 'io': 'native'}.iteritems():
             xml_disk_driver.set(key, value)
         xml_disk_source = ET.SubElement(xml_disk, 'source')
         xml_disk_source.set(dsrc, img)
