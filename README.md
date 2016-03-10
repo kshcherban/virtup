@@ -38,10 +38,10 @@ Or create basic installation from [kickstart file](./ubuntu-kickstart.cfg):
 # Set ubuntu release to create
 release="trusty"
 # Create vm drive for installation
-qemu-img create -f qcow2 /tmp/${release}.qcow2 8G
-virt-install --name base-${release} --ram 1024 --disk path=/tmp/${release}.qcow2,size=8 \
+qemu-img create -f qcow2 ./${release}.qcow2 8G
+virt-install --name base-${release} --ram 1024 --disk path=./${release}.qcow2,size=8 \
   --vcpus 1 --os-type linux --os-variant generic --network bridge=virbr0 \
-  --graphics none --console pty,target_type=serial \
+  --graphics none --console pty,target_type=serial --noreboot \
   --location "http://archive.ubuntu.com/ubuntu/dists/${release}/main/installer-amd64/" \
   --extra-args "console=ttyS0,115200n8 ks=http://pastebin.com/raw/eY5ybGfc"
 ```
@@ -50,7 +50,7 @@ virt-install --name base-${release} --ram 1024 --disk path=/tmp/${release}.qcow2
 specified
 
 ```
-./virtup.py import -i /tmp/${release}.qcow2 ubuntu-${release}
+./virtup.py import -i ./${release}.qcow2 ubuntu-${release}
 Uploading template into volume ubuntu-trusty
 done 100.00%
 Temporary template written in /tmp/ubuntu-trusty.xml
