@@ -32,19 +32,22 @@ wget -O debian.xz http://goo.gl/queYqC
 unxz debian.xz
 ```
 
-Or create basic installation from [kickstart file](./ubuntu-kickstart.cfg):
+Or create basic ubuntu installation from [kickstart file](./kickstarts/ubuntu-kickstart.cfg):
 
 ```bash
 # Set ubuntu release to create
 release="trusty"
 # Create vm drive for installation
 qemu-img create -f qcow2 ./${release}.qcow2 8G
+# Start installation
 virt-install --name base-${release} --ram 1024 --disk path=./${release}.qcow2,size=8 \
   --vcpus 1 --os-type linux --os-variant generic --network bridge=virbr0 \
   --graphics none --console pty,target_type=serial --noreboot \
   --location "http://archive.ubuntu.com/ubuntu/dists/${release}/main/installer-amd64/" \
   --extra-args "console=ttyS0,115200n8 ks=http://pastebin.com/raw/eY5ybGfc"
 ```
+
+Alternatively you can use [centos7 kickstart](./kickstarts/centos-kickstart.cfg)
 
 4\. Import it with preferred name, optionally memory, cpu, net and storage pool can be
 specified
