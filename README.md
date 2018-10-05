@@ -20,7 +20,7 @@ You can have running guest in six steps.
 
 1\. Install requirements  
 **Ubuntu/Debian**  
-```sudo apt-get install libvirt-bin python-libvirt```
+```sudo apt-get install libvirt-daemon-system libvirt-clients python-libvirt```
 
 **CentOS/Fedora**  
 ```sudo yum install qemu-kvm libvirt libvirt-python```
@@ -46,6 +46,8 @@ virt-install --name base-${release} --ram 1024 --disk path=./${release}.qcow2,si
   --location "http://archive.ubuntu.com/ubuntu/dists/${release}/main/installer-amd64/" \
   --extra-args "console=ttyS0,115200n8 ks=http://pastebin.com/raw/eY5ybGfc"
 ```
+
+Or run `sudo ./kickstarts/debian_install.sh <jessie|wheezy|stretch|...>` to create desired debian image.
 
 Alternatively you can use [centos7 kickstart](./kickstarts/centos-kickstart.cfg)
 
