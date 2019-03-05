@@ -47,7 +47,12 @@ virt-install --name base-${release} --ram 1024 --disk path=./${release}.qcow2,si
   --extra-args "console=ttyS0,115200n8 ks=http://pastebin.com/raw/eY5ybGfc"
 ```
 
-Or run `sudo ./kickstarts/debian_install.sh <jessie|wheezy|stretch|...>` to create desired debian image.
+Or to create desired debian/centos image run
+
+```
+sudo ./kickstarts/install.sh <jessie|wheezy|stretch|centos-7|...>
+```
+
 
 Alternatively you can use [centos7 kickstart](./kickstarts/centos-kickstart.cfg)
 
