@@ -1,4 +1,4 @@
-#!/usr/bin/python -u
+#!/usr/bin/python3 -u
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2013 Konstantin Shcherban <k.scherban@gmail.com>
@@ -56,7 +56,7 @@ class Disk:
         if imgtype == 'qcow2':
             tmpl_alloc = ET.SubElement(tmpl_root, 'allocation')
             tmpl_alloc.text = '536576'
-        return ET.tostring(tmpl_root)
+        return ET.tostring(tmpl_root, encoding="unicode")
 
     def vol_obj(self, obj):
         """Return volume object independently of what provided:
@@ -154,7 +154,7 @@ class Disk:
             flags = 0
             vol.upload(stream, offset, length, flags)
             # Open source file
-            fileobj = open(src, "r")
+            fileobj = open(src, "rb")
             # Start transfer
             total = 0
             print ('Uploading volume {0} from {1}'.format(vol.name(),
@@ -170,7 +170,8 @@ class Disk:
             # Cleanup
             stream.finish()
             print('')
-        except:
+        except Exception as e:
+            print(e)
             if vol:
                 vol.delete(0)
             return 0
@@ -361,7 +362,7 @@ def get_stor(machname, pool=True):
             if ET.fromstring(o.XMLDesc(0)).find('.//path').text == path:
                 return p
     else:
-        for i in data.iteritems():
+        for i in data.items():
             for v in i[1]:
                 o = conn.storagePoolLookupByName(i[0]).storageVolLookupByName(v)
                 if ET.fromstring(o.XMLDesc(0)).find('.//path').text == path:
@@ -433,7 +434,7 @@ def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype, net, type='kvm'):
         xml_disk.set('device', 'disk')
         xml_disk_driver = ET.SubElement(xml_disk, 'driver')
         for key, value in {'name': 'qemu', 'type': format, 'cache': 'none',
-                'cache.direct': 'on', 'io': 'native'}.iteritems():
+                'cache.direct': 'on', 'io': 'native'}.items():
             xml_disk_driver.set(key, value)
         xml_disk_source = ET.SubElement(xml_disk, 'source')
         xml_disk_source.set(dsrc, img)
@@ -451,7 +452,7 @@ def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype, net, type='kvm'):
         xml_video_model.set('heads', '1')
         xml_video_address = ET.SubElement(xml_video, 'address')
         for key, value in {'type': 'pci', 'domain': '0x0000', 'bus': '0x00',
-                            'slot': '0x02', 'function': '0x0'}.iteritems():
+                            'slot': '0x02', 'function': '0x0'}.items():
             xml_video_address.set(key, value)
     else:
         xml_type.text = 'exe'
@@ -469,8 +470,8 @@ def prepare_tmpl(machname, mac, cpu, mem, img, format, dtype, net, type='kvm'):
     pretty_xml = xml.dom.minidom.parseString(ET.tostring(xml_root)).toprettyxml()
     with open(tmpf, 'w') as wf:
         wf.write(pretty_xml)
-        print 'Temporary template written in', tmpf
-    return ET.tostring(xml_root)
+        print(f'Temporary template written in {tmpf}')
+    return ET.tostring(xml_root, encoding="unicode")
 
 
 # Return modified xml from imported file ready for defining guest
@@ -495,7 +496,7 @@ def xml2tmpl(xmlf, machname, image=None, format=None, dtype=None, mac=None):
         xe.find('.//devices/disk/source').set(stype, image)
     if mac:
         xe.find('.//devices/interface/mac').set('address', mac)
-    return ET.tostring(xe)
+    return ET.tostring(xe, encoding="unicode")
 
 
 def argcheck(arg):
