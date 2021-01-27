@@ -18,7 +18,6 @@ import os
 import re
 import sys
 import tty
-import time
 import random
 import termios
 import atexit
@@ -113,7 +112,7 @@ class Disk:
         f = open(src, 'w')
         # Start transfer
         total = 0
-        print ('Downloading volume {0} into {1}'.format(vol.name(),
+        print('Downloading volume {0} into {1}'.format(vol.name(),
                 os.path.abspath(src)))
         try:
             while True:
@@ -157,7 +156,7 @@ class Disk:
             fileobj = open(src, "rb")
             # Start transfer
             total = 0
-            print ('Uploading volume {0} from {1}'.format(vol.name(),
+            print('Uploading volume {0} from {1}'.format(vol.name(),
                     os.path.abspath(src)))
             while True:
                 blocksize = 256000
@@ -505,7 +504,7 @@ def argcheck(arg):
     elif arg[-1].lower() == 'g':
         return int(arg[:-1]) * (1024 ** 2)
     else:
-        print ('Error! Format can be <int>M or <int>G')
+        print('Error! Format can be <int>M or <int>G')
         sys.exit(1)
 
 
@@ -513,19 +512,19 @@ def lsvirt(storage, volumes):
     pools = sorted(conn.listStoragePools())
     # List storage pools
     if storage:
-        print ('{0:<30}{1:<10}{2:<10}{3:<10}{4:<10}'.format('Pool name', 'Size',
+        print('{0:<30}{1:<10}{2:<10}{3:<10}{4:<10}'.format('Pool name', 'Size',
             'Used', 'Avail', 'Use'))
         for i in pools:
             p = conn.storagePoolLookupByName(i).info()
             use = '{0:.2%}'.format(float(p[2]) / float(p[1]))
-            print ('{0:<30}{1:<10}{2:<10}{3:<10}{4:<10}'.format(i, convert_bytes(p[1]),
+            print('{0:<30}{1:<10}{2:<10}{3:<10}{4:<10}'.format(i, convert_bytes(p[1]),
                 convert_bytes(p[2]), convert_bytes(p[3]), use))
         sys.exit(0)
     # List volumes
     if volumes:
         # Find list of machines and create dict with list of vols associated to them
         ml = [conn.lookupByID(i).name() for i in conn.listDomainsID()] + conn.listDefinedDomains()
-        print ('{0:<15}{1:<30}{2:<10}{3:<10}{4:<10}'.format('Pool', 'Volume', 'Size',
+        print('{0:<15}{1:<30}{2:<10}{3:<10}{4:<10}'.format('Pool', 'Volume', 'Size',
                 'Use', 'Used by'))
         for p in pools:
             vols = conn.storagePoolLookupByName(p).listVolumes()
@@ -536,14 +535,14 @@ def lsvirt(storage, volumes):
                     for v in associated_vols:
                         vol_dict[v] = mach
             pinf = conn.storagePoolLookupByName(p).info()
-            print (p)
-            print ('{0:>15}'.format('\\'))
+            print(p)
+            print('{0:>15}'.format('\\'))
             for v in sorted(vols):
                 if v not in vol_dict:
                     vol_dict[v] = None
                 vinf = conn.storagePoolLookupByName(p).storageVolLookupByName(v).info()
                 use = '{0:.2%}'.format(float(vinf[2]) / float(pinf[1]))
-                print ('{0:<15}{1:<30}{2:<10}{3:<10}{4:<10}'.format(' ', v,
+                print('{0:<15}{1:<30}{2:<10}{3:<10}{4:<10}'.format(' ', v,
                         convert_bytes(vinf[2]), use, vol_dict[v]))
         sys.exit(0)
     # List machines
@@ -560,9 +559,9 @@ def lsvirt(storage, volumes):
             state = 'up'
         else:
             state = 'down'
-        print ('{0:<30}{1:<10}{2:<10}{3:<10}{4:>5}'.format(i, j[3],
+        print('{0:<30}{1:<10}{2:<10}{3:<10}{4:>5}'.format(i, j[3],
             convert_bytes(j[1] * 1024), state, a))
-    print ('{0:<30}{1:<10}{2:<10}{3:<10}{4:>5}'.format('Name', 'CPUs', 'Memory',
+    print('{0:<30}{1:<10}{2:<10}{3:<10}{4:>5}'.format('Name', 'CPUs', 'Memory',
             'State', 'Autostart'))
     for i in sorted(vsorted):
         dinfo(i)
@@ -760,56 +759,56 @@ if __name__ == '__main__':
             else:
                 auto = 0
             dom.setAutostart(auto)
-            print ('{0} autostart {1}'.format(args.name, args.auto))
+            print('{0} autostart {1}'.format(args.name, args.auto))
         except libvirt.libvirtError:
             sys.exit(1)
 
 # Ls command section
     if args.sub == 'ls':
         if args.ip + args.storage + args.volumes + args.net + args.info >= 2:
-            print ('Please specify only one option at a time')
+            print('Please specify only one option at a time')
             sys.exit(1)
         vsorted = [conn.lookupByID(i).name() for i in conn.listDomainsID()]
         if args.net:
-            print ('{0:<30}{1:<15}'.format('Interfaces', 'Status'))
+            print('{0:<30}{1:<15}'.format('Interfaces', 'Status'))
             for i in conn.listInterfaces():
-                print ('{0:<30}{1:<15}'.format(i, 'active'))
+                print('{0:<30}{1:<15}'.format(i, 'active'))
             for i in conn.listDefinedInterfaces():
-                print ('{0:<30}{1:<15}'.format(i, 'inactive'))
+                print('{0:<30}{1:<15}'.format(i, 'inactive'))
             sys.exit(0)
         if args.info:
             hyper_info = conn.getInfo()
             used_mem = sum([conn.lookupByName(i).info()[2] for i in vsorted])
-            print ('{0:<30}{1:<15}'.format('Hostname:', conn.getHostname()))
-            print ('{0:<30}{1:<15}'.format('CPU count:', hyper_info[2]))
-            print ('{0:<30}{1:<15}'.format('CPU MHz:', hyper_info[3]))
-            print ('{0:<30}{1:<15}'.format('Architecture:', hyper_info[0]))
-            print ('{0:<30}{1:<15}'.format('Memory total:', str(hyper_info[1]) + 'MB'))
-            print ('{0:<30}{1:<15}'.format('Memory used:', str(used_mem / 1024) + 'MB'))
-            print ('{0:<30}{1:<15}'.format('Memory free:',
+            print('{0:<30}{1:<15}'.format('Hostname:', conn.getHostname()))
+            print('{0:<30}{1:<15}'.format('CPU count:', hyper_info[2]))
+            print('{0:<30}{1:<15}'.format('CPU MHz:', hyper_info[3]))
+            print('{0:<30}{1:<15}'.format('Architecture:', hyper_info[0]))
+            print('{0:<30}{1:<15}'.format('Memory total:', str(hyper_info[1]) + 'MB'))
+            print('{0:<30}{1:<15}'.format('Memory used:', str(used_mem / 1024) + 'MB'))
+            print('{0:<30}{1:<15}'.format('Memory free:',
                 str(hyper_info[1] - used_mem / 1024) + 'MB'))
             sys.exit(0)
         if not args.ip:
             lsvirt(args.storage, args.volumes)
             sys.exit(0)
         if args.uri == 'qemu:///system':
-            print ('{0:<30}{1:<15}'.format('Name', 'IP'))
+            print('{0:<30}{1:<15}'.format('Name', 'IP'))
             for i in sorted(vsorted):
                 ip = Net(conn).ip(i)
-                print ('{0:<30}{1:<15}'.format(i, ip))
+                print('{0:<30}{1:<15}'.format(i, str(ip)))
         else:
-            print ('Not available for remote connections')
+            print('Not available for remote connections')
 
 # Import and Create section
     if args.sub == 'import':
         if not args.xml and not args.image:
-            print ('Either -xml or -i should be specified')
+            print('Either -xml or -i should be specified')
             sys.exit(1)
         mem = argcheck(args.mem)
         if not args.mac and not args.xml:
             mac = randomMAC()
         elif not is_mac_addr(args.mac):
-            print ('Incorrect mac address: {0}'.format(args.mac))
+            print('Incorrect mac address: {0}'.format(args.mac))
             sys.exit(1)
         else:
             mac = args.mac
@@ -832,7 +831,7 @@ if __name__ == '__main__':
                                         'format', 'mount', mac)
             else:   # QEMU
                 if not os.path.isfile(args.image):
-                    print ('{0} not found'.format(args.image))
+                    print('{0} not found'.format(args.image))
                     sys.exit(1)
                 format = find_image_format(args.image)
                 imgsize = os.path.getsize(args.image)
@@ -849,13 +848,13 @@ if __name__ == '__main__':
                                             format, dtype, args.net, 'kvm')
         try:
             conn.defineXML(template)
-            print ('{0} imported'.format(args.name))
+            print('{0} imported'.format(args.name))
         except libvirt.libvirtError:
             sys.exit(1)
         if upload:
             ret = Disk(conn, args.pool).upload_vol(args.name, args.image)
             if not ret:
-                print ('Upload failed. Exiting')
+                print('Upload failed. Exiting')
                 sys.exit(1)
 
 # Create section
@@ -864,7 +863,7 @@ if __name__ == '__main__':
         if not args.mac:
             mac = randomMAC()
         elif not is_mac_addr(args.mac):
-            print ('Incorrect mac address: {0}'.format(args.mac))
+            print('Incorrect mac address: {0}'.format(args.mac))
             sys.exit(1)
         else:
             mac = args.mac
@@ -880,7 +879,7 @@ if __name__ == '__main__':
             dtype, args.net)
         try:
             conn.defineXML(template)
-            print ('{0} created'.format(args.name))
+            print('{0} created'.format(args.name))
         except libvirt.libvirtError:
             sys.exit(1)
 
@@ -890,7 +889,7 @@ if __name__ == '__main__':
             dom = conn.lookupByName(args.name)
             s = dom.create()
             if s == 0:
-                print ('{0} started'.format(args.name))
+                print('{0} started'.format(args.name))
         except libvirt.libvirtError:
             sys.exit(1)
 
@@ -900,7 +899,7 @@ if __name__ == '__main__':
             dom = conn.lookupByName(args.name)
             s = dom.destroy()
             if s == 0:
-                print ('{0} powered off'.format(args.name))
+                print('{0} powered off'.format(args.name))
         except libvirt.libvirtError:
             sys.exit(1)
 
@@ -910,12 +909,12 @@ if __name__ == '__main__':
         vol = get_stor(args.name, 0)
         try:
             conn.lookupByName(args.name).undefine()
-            print ('{0} removed'.format(args.name))
+            print('{0} removed'.format(args.name))
         except libvirt.libvirtError:
             sys.exit(1)
         if args.full and vol:
             Disk(conn, pool).delete_vol(vol)
-            print ('Volume {0} removed'.format(vol))
+            print('Volume {0} removed'.format(vol))
 
 # Suspend section
     if args.sub == 'suspend':
@@ -923,11 +922,11 @@ if __name__ == '__main__':
             dom = conn.lookupByName(args.name)
             if not args.f:
                 if args.uri != 'qemu:///system':
-                    print ('Option -f is required for remote connection')
+                    print('Option -f is required for remote connection')
                     sys.exit(1)
                 args.f = args.name + '.sav'
             dom.save(args.f)
-            print ('{0} suspended into {1}'.format(args.name, args.f))
+            print('{0} suspended into {1}'.format(args.name, args.f))
         except:
             sys.exit(1)
 
@@ -935,23 +934,23 @@ if __name__ == '__main__':
     if args.sub == 'resume':
         if not args.f:
             if args.uri != 'qemu:///system':
-                print ('Option -f is required for remote connection')
+                print('Option -f is required for remote connection')
                 sys.exit(1)
             args.f = args.name + '.sav'
         try:
             conn.restore(args.f)
-            print ('{0} resumed from {1}'.format(args.name, args.f))
+            print('{0} resumed from {1}'.format(args.name, args.f))
         except libvirt.libvirtError:
             sys.exit(1)
 
 # Export section
     if args.sub == 'export':
         if not args.xml and not args.image:
-            print ('Nothing to export')
+            print('Nothing to export')
             sys.exit(1)
         if args.xml:
             try:
-                print (conn.lookupByName(args.name).XMLDesc(0))
+                print(conn.lookupByName(args.name).XMLDesc(0))
             except libvirt.libvirtError:
                 sys.exit(1)
         if not args.image:
@@ -960,12 +959,12 @@ if __name__ == '__main__':
             f = open(args.image, 'w')
             f.close()
         except IOError as e:
-            print (e)
+            print(e)
             sys.exit(1)
         pool = get_stor(args.name)
         vol = get_stor(args.name, 0)
         if not vol:
-            print ('Volume attached to {0} not found'.format(args.name))
+            print('Volume attached to {0} not found'.format(args.name))
             sys.exit(1)
         if Disk(conn, pool).download_vol(vol, args.image):
             sys.exit(0)
@@ -986,7 +985,7 @@ if __name__ == '__main__':
             dom.openConsole(None, stream, 0)
         except libvirt.libvirtError:
             sys.exit(1)
-        print ('Escape character is ^] press Enter')
+        print('Escape character is ^] press Enter')
         run_console = True
         stdin_watch = libvirt.virEventAddHandle(
             0,
@@ -1002,7 +1001,7 @@ if __name__ == '__main__':
         if args.add:
             imgsize = argcheck(args.size) * 1024
             Disk(conn, args.pool).create_vol(args.volume, imgsize, 'raw')
-            print ('Volume {0} created'.format(args.volume))
+            print('Volume {0} created'.format(args.volume))
         else:
             Disk(conn, args.pool).delete_vol(args.volume)
-            print ('Volume {0} removed'.format(args.volume))
+            print('Volume {0} removed'.format(args.volume))
